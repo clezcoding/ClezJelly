@@ -1,0 +1,139 @@
+name: clezjelly
+
+networks:
+  clezjelly:
+    driver: bridge
+
+services:
+  # ─────────────────────────────────────────────────────────────────
+  # AltMount — Usenet WebDAV Virtual Filesystem
+  # Streamt Usenet-Content on-demand, kein lokaler Download
+  # Web-UI: http://localhost:8080
+  # ─────────────────────────────────────────────────────────────────
+  altmount:
+    image: ghcr.io/kipsilabs/altmount:latest
+    container_name: clezjelly-altmount
+    restart: unless-stopped
+    networks:
+      - clezjelly
+    ports:
+      - "8080:8080"
+    environment:
+      - PUID=${PUID:-501}
+      - PGID=${PGID:-20}
+      - PORT=8080
+      - JWT_SECRET=${ALTMOUNT_JWT_SECRET}
+      - COOKIE_DOMAIN=localhost
+      - TZ=${TZ:-Europe/Vienna}
+    volumes:
+      - ./config/altmount:/config
+      - ./data/media:/media
+      - ./data/strm:/strm
+      - ./data/metadata:/metadata
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # ─────────────────────────────────────────────────────────────────
+  # Prowlarr — Indexer-Manager
+  # Konfiguriert alle NZB-Indexer zentral und synct zu Radarr/Sonarr
+  # Web-UI: http://localhost:9696
+  # ─────────────────────────────────────────────────────────────────
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:latest
+    container_name: clezjelly-prowlarr
+    restart: unless-stopped
+    networks:
+      - clezjelly
+    ports:
+      - "9696:9696"
+    environment:
+      - PUID=${PUID:-501}
+      - PGID=${PGID:-20}
+      - TZ=${TZ:-Europe/Vienna}
+    volumes:
+      - ./config/prowlarr:/config
+
+  # ─────────────────────────────────────────────────────────────────
+  # Radarr — Film-Automation
+  # Suche, Download-Trigger, Qualitätsprofile, Umbenennung
+  # Web-UI: http://localhost:7878
+  # ─────────────────────────────────────────────────────────────────
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    container_name: clezjelly-radarr
+    restart: unless-stopped
+    networks:
+      - clezjelly
+    ports:
+      - "7878:7878"
+    environment:
+      - PUID=${PUID:-501}
+      - PGID=${PGID:-20}
+      - TZ=${TZ:-Europe/Vienna}
+    volumes:
+      - ./config/radarr:/config
+      - ./data/media/movies:/movies
+      - ./data/strm:/strm
+
+  # ─────────────────────────────────────────────────────────────────
+  # Sonarr — Serien-Automation
+  # Suche, Download-Trigger, Qualitätsprofile, Umbenennung
+  # Web-UI: http://localhost:8989
+  # ─────────────────────────────────────────────────────────────────
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:latest
+    container_name: clezjelly-sonarr
+    restart: unless-stopped
+    networks:
+      - clezjelly
+    ports:
+      - "8989:8989"
+    environment:
+      - PUID=${PUID:-501}
+      - PGID=${PGID:-20}
+      - TZ=${TZ:-Europe/Vienna}
+    volumes:
+      - ./config/sonarr:/config
+      - ./data/media/tv:/tv
+      - ./data/strm:/strm
+
+  # ─────────────────────────────────────────────────────────────────
+  # Jellyseerr — Request-UI
+  # Schöne Oberfläche zum Suchen & Anfragen von Filmen/Serien
+  # Web-UI: http://localhost:5055
+  # ─────────────────────────────────────────────────────────────────
+  jellyseerr:
+    image: fallenbagel/jellyseerr:latest
+    container_name: clezjelly-jellyseerr
+    restart: unless-stopped
+    networks:
+      - clezjelly
+    ports:
+      - "5055:5055"
+    environment:
+      - LOG_LEVEL=info
+      - TZ=${TZ:-Europe/Vienna}
+    volumes:
+      - ./config/jellyseerr:/app/config
+
+  # ─────────────────────────────────────────────────────────────────
+  # Bazarr — Untertitel-Automation (DE/EN automatisch)
+  # Zieht sich passende Untertitel für neue Imports
+  # Web-UI: http://localhost:6767
+  # ─────────────────────────────────────────────────────────────────
+  bazarr:
+    image: lscr.io/linuxserver/bazarr:latest
+    container_name: clezjelly-bazarr
+    restart: unless-stopped
+    networks:
+      - clezjelly
+    ports:
+      - "6767:6767"
+    environment:
+      - PUID=${PUID:-501}
+      - PGID=${PGID:-20}
+      - TZ=${TZ:-Europe/Vienna}
+    volumes:
+      - ./config/bazarr:/config
+      - ./data/media/movies:/movies
+      - ./data/media/tv:/tv

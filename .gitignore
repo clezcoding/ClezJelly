@@ -1,0 +1,39 @@
+# ──────────────────────────────────────────────────────────────────
+# ClezJelly .gitignore
+# ──────────────────────────────────────────────────────────────────
+
+# Credentials — niemals committen!
+.env
+*.env
+!.env.example
+
+# Service-Configs (enthalten API-Keys, Passwörter)
+config/*
+!config/altmount/config.sample.yaml
+!config/.gitkeep
+
+# Daten
+data/
+*.db
+*.sqlite
+*.sqlite3
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Logs
+logs/
+*.log
+
+# Backup-Dateien
+*.bak
+*.backup
+*.swp
+*~
+
+# Editor
+.vscode/
+.idea/
+*.sublime-*
