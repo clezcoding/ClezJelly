@@ -117,24 +117,38 @@ check_homebrew() {
 
 check_docker() {
   log_step "Docker Check"
-  if ! command -v docker &>/dev/null; then
-    log_warn "Docker Desktop ist nicht installiert."
-    if prompt_yes_no "Jetzt mit Homebrew installieren?"; then
-      brew install --cask docker
-      log_ok "Docker Desktop installiert"
-      log_warn "Bitte Docker Desktop manuell starten und dann dieses Script erneut ausführen."
-      exit 0
-    else
-      log_err "Docker ist Pflicht. Breche ab."
-      exit 1
-    fi
+
+  # Detect runtime: OrbStack, Docker Desktop, Colima, Rancher Desktop…
+  local runtime="unbekannt"
+  if command -v orb &>/dev/null || [[ -d "/Applications/OrbStack.app" ]]; then
+    runtime="OrbStack"
+  elif [[ -d "/Applications/Docker.app" ]]; then
+    runtime="Docker Desktop"
+  elif command -v colima &>/dev/null; then
+    runtime="Colima"
   fi
-  if ! docker info &>/dev/null; then
-    log_err "Docker Desktop läuft nicht. Bitte starten und erneut versuchen."
-    log_info "Öffne Docker Desktop manuell oder: open -a Docker"
+
+  if ! command -v docker &>/dev/null; then
+    log_warn "Kein Docker-CLI gefunden."
+    log_info "Empfehlung für macOS: OrbStack (leichter, schneller als Docker Desktop)"
+    log_info "  brew install --cask orbstack"
+    log_info "Alternativ Docker Desktop:"
+    log_info "  brew install --cask docker"
     exit 1
   fi
-  log_ok "Docker läuft: $(docker --version)"
+
+  if ! docker info &>/dev/null; then
+    log_err "Docker-Daemon läuft nicht ($runtime)."
+    case "$runtime" in
+      OrbStack)       log_info "Starten mit: open -a OrbStack" ;;
+      "Docker Desktop") log_info "Starten mit: open -a Docker" ;;
+      Colima)         log_info "Starten mit: colima start" ;;
+      *)              log_info "Bitte deine Docker-Runtime manuell starten." ;;
+    esac
+    exit 1
+  fi
+
+  log_ok "$runtime läuft: $(docker --version)"
 }
 
 check_jellyfin() {
