@@ -269,7 +269,7 @@ show_next_steps() {
   echo ""
   echo "  ${BOLD}2.${RESET} ${BOLD}Prowlarr${RESET} — Indexer einrichten"
   echo "     ${CYAN}http://localhost:9696${RESET}"
-  echo "     ${DIM}NZBGeek + nzb.cat als Indexer, dann Apps (Radarr/Sonarr) verbinden${RESET}"
+  echo "     ${DIM}NZBGeek + mind. 1 weiterer Indexer, dann Apps (Radarr/Sonarr) verbinden${RESET}"
   echo ""
   echo "  ${BOLD}3.${RESET} ${BOLD}Radarr${RESET} — Film-Automation"
   echo "     ${CYAN}http://localhost:7878${RESET}"

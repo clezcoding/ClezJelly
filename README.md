@@ -60,7 +60,7 @@ Keine lokale Platte, kein Festplatten-Management, keine zweistündigen Downloads
 │  (NL, EU-schnell)   │                   │
 └─────────────────────┘                   ▼
                                  ┌────────────────────┐
-                                 │  NZBGeek + nzb.cat │
+                                 │  NZBGeek + 2nd Idx │
                                  │  (DE+EN Suche)     │
                                  └────────────────────┘
 ```
@@ -68,7 +68,7 @@ Keine lokale Platte, kein Festplatten-Management, keine zweistündigen Downloads
 ### Datenfluss
 
 1. **Request:** Du suchst HIMYM in Jellyseerr → Request an Sonarr
-2. **Suche:** Sonarr fragt Prowlarr → NZBGeek + nzb.cat finden den besten deutschen Release
+2. **Suche:** Sonarr fragt Prowlarr → NZBGeek + zweiter Indexer finden den besten deutschen Release
 3. **Übergabe:** Sonarr schickt die NZB an AltMount (als SABnzbd-API-Call)
 4. **Virtualisierung:** AltMount erzeugt sofort eine `.strm`-Datei in `/media/tv/HIMYM/...` → kein Download!
 5. **Import:** Sonarr importiert → benennt um → triggert Jellyfin-Scan
@@ -82,8 +82,8 @@ Keine lokale Platte, kein Festplatten-Management, keine zweistündigen Downloads
 |---|---|
 | Eweka Classic (unlimited Usenet) | ~€9 |
 | NZBGeek Standard (jährliche Zahlung) | ~€1 |
-| nzb.cat Lifetime | **einmalig ~$10** |
-| **Monatlich gesamt** | **~€10** |
+| Zweiter Indexer (DrunkenSlug / NZBPlanet / NZB.su) | ~€0–1 |
+| **Monatlich gesamt** | **~€10–11** |
 | **Hardware** | **€0** (MacBook hast du schon) |
 
 Zum Vergleich: Netflix Standard = €13,99/Monat.
@@ -99,7 +99,7 @@ Zum Vergleich: Netflix Standard = €13,99/Monat.
 - **Homebrew** installiert (`/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"`)
 - **Usenet-Provider-Account** → [Eweka](https://www.eweka.nl/) (NL, €9/Monat Classic)
 - **NZBGeek-Account** → [nzbgeek.info](https://nzbgeek.info/) ($12/Jahr)
-- **nzb.cat-Account** → [nzb.cat](https://nzb.cat/) ($10 Lifetime, deutsche Releases)
+- **Zweiter Indexer** (empfohlen für DE-Content) → siehe [`docs/01-prerequisites.md`](docs/01-prerequisites.md). Es gibt keinen dedizierten DE-API-Indexer mehr; mehrere Allgemein-Indexer parallel ist die aktuelle Lösung.
 
 ---
 

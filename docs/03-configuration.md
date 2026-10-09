@@ -99,18 +99,29 @@ Links **Indexers → Add Indexer**.
 - API Key: *aus NZBGeek-Account*
 - Save
 
-**nzb.cat:**
-- Suche nach `nzb.cat`
-- Add
-- API URL: `https://nzb.cat`
-- API Key: *aus nzb.cat-Account*
-- Save
+**Zweiter Indexer** (einen davon einrichten — welchen du hast):
 
-**(Optional) altHUB:**
-- Suche `althub`
-- Add
-- API Key eintragen
-- Save
+**DrunkenSlug:**
+- Suche `drunkenslug`
+- API URL: `https://drunkenslug.com`
+- API Key eintragen → Save
+
+**NZBPlanet:**
+- Suche `nzbplanet`
+- API URL: `https://nzbplanet.net`
+- API Key eintragen → Save
+
+**NZB.su:**
+- Suche `nzb.su`
+- API URL: `https://api.nzb.su`
+- API Key eintragen → Save
+
+**DogNZB** (falls du einen Account hast):
+- Suche `dognzb`
+- API URL: `https://api.dognzb.cr`
+- API Key eintragen → Save
+
+> **Tipp:** Je mehr Indexer, desto bessere DE-Treffer. 2-3 ist der Sweet-Spot.
 
 Alle Indexer sollten grüne Status-Punkte zeigen.
 
@@ -203,7 +214,7 @@ Zurück zu **Prowlarr → Settings → Apps → Add Application**.
 
 **Prowlarr → Indexers → Sync App Indexers** (oben).
 
-Prüfen: In Radarr → Settings → Indexers sollten **NZBGeek + nzb.cat** jetzt auftauchen. Dasselbe in Sonarr.
+Prüfen: In Radarr → Settings → Indexers sollten jetzt **alle Indexer** auftauchen, die du in Prowlarr konfiguriert hast. Dasselbe in Sonarr.
 
 ---
 

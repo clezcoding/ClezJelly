@@ -2,24 +2,31 @@
 
 Dieser Guide sorgt dafür, dass du Bergdoktor, Tatort, HIMYM-DE etc. findest.
 
+## Realitäts-Check: Es gibt keinen reinen DE-Indexer mehr
+
+Die dedizierten deutschen API-Indexer sind alle offline (nzb.cat, SceneNZBs, Newz Complex). **Lösung:** Mehrere allgemeine Indexer parallel laufen lassen — DE-Releases sind da, nur ohne „German"-Flag, über Scene-Tags findbar.
+
 ## Strategie
 
-Deutsche Releases kommen aus mehreren Quellen:
-1. **nzb.cat** → bester allgemeiner Indexer für DE
-2. **NZBGeek** → auch DE drin, nur schwächer
-3. **altHUB** → spezifische DE-Scene-Releases
-4. **TRaSH-Custom-Formats** → priorisiert DE-Tonspuren bei der Auswahl
+Deutsche Releases werden erreicht durch:
+1. **Mehrere Allgemein-API-Indexer** (NZBGeek + DrunkenSlug/NZBPlanet/NZB.su) → tragen DE-Scene-Releases mit
+2. **TRaSH-Custom-Formats** → priorisiert `.GERMAN.` / `.GER.` / `.ML.` Scene-Tags automatisch
+3. **Prowlarr als Aggregator** → sucht alle gleichzeitig, nimmt besten Treffer
+4. **Optional: Boards** (BoU, Sky of Usenet) → manuell für obskuren Content
 
 ## 1. Alle Indexer in Prowlarr
 
 Siehe [`03-configuration.md § 2.2`](03-configuration.md).
 
-Zusätzlich zu NZBGeek + nzb.cat kannst du einrichten:
-- **altHUB** (Free Tier reicht)
-- **DOGnzb** (Invite only — falls du einen Invite auftreibst)
-- **Drunken Slug** (open signups manchmal)
+Zusätzlich zu NZBGeek **mindestens einen** der folgenden einrichten:
+- **DrunkenSlug** — ⭐⭐⭐⭐ Qualität, Invite-only ([r/UsenetInvites](https://reddit.com/r/UsenetInvites))
+- **NZBPlanet** — oft open Signup
+- **NZB.su** — open Signup, kostenlos/Donate
+- **DogNZB** — ⭐⭐⭐⭐ Qualität, Invite-only
+- **NinjaCentral** — ~24h-Fenster an Feiertagen (Black Friday, 4. Mai)
+- **NZBFinder** — zeitweise open
 
-Je mehr Indexer, desto höher die Chance auf gute DE-Treffer.
+Je mehr Indexer, desto höher die Chance auf gute DE-Treffer. 3 Indexer ist der Sweet-Spot — mehr bringt wenig und erhöht Rate-Limit-Risiken.
 
 ## 2. TRaSH-Custom-Formats für Deutsch
 
@@ -86,7 +93,7 @@ Dies ist komplett legal, da ARD/ZDF/ORF selbst zum Download anbieten.
 | Content | Realistisch findbar |
 |---|---|
 | Große US-Serien (HIMYM, Breaking Bad, Game of Thrones) auf DE | ✅ fast immer, Dual-Audio |
-| Deutsche Mainstream-Serien (Tatort, Bergdoktor) | ✅ meist, über nzb.cat |
+| Deutsche Mainstream-Serien (Tatort, Bergdoktor) | ✅ meist, über 2-3 Indexer parallel |
 | Deutsche Netflix/Amazon Originals | 🟡 oft, aber manchmal verzögert |
 | Nischige deutsche Produktionen | 🟡 teils schwer |
 | 4K/UHD auf DE | 🔴 selten, auch bandbreitentechnisch für dich nicht sinnvoll |
