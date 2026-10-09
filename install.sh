@@ -20,7 +20,6 @@ readonly YELLOW=$'\033[0;33m'
 readonly BLUE=$'\033[0;34m'
 readonly MAGENTA=$'\033[0;35m'
 readonly CYAN=$'\033[0;36m'
-readonly WHITE=$'\033[0;37m'
 
 readonly CHECK="${GREEN}✓${RESET}"
 readonly CROSS="${RED}✗${RESET}"
@@ -29,7 +28,8 @@ readonly INFO="${BLUE}ℹ${RESET}"
 readonly WARN="${YELLOW}⚠${RESET}"
 readonly ROCKET="🚀"
 
-readonly SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+readonly SCRIPT_DIR
 
 # ── Logging-Helpers ───────────────────────────────────────────────
 log_header() {

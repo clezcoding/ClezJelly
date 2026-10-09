@@ -6,7 +6,6 @@ set -euo pipefail
 cd "$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
 
 readonly GREEN=$'\033[0;32m'
-readonly RED=$'\033[0;31m'
 readonly YELLOW=$'\033[0;33m'
 readonly CYAN=$'\033[0;36m'
 readonly BOLD=$'\033[1m'
