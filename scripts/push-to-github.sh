@@ -44,7 +44,8 @@ if git remote get-url origin &>/dev/null; then
   git remote get-url origin
   echo ""
   read -p "Trotzdem pushen? [y/N] " confirm
-  if [[ "${confirm,,}" != "y" ]]; then
+  confirm_lc="$(printf '%s' "$confirm" | tr '[:upper:]' '[:lower:]')"
+  if [[ "$confirm_lc" != "y" ]]; then
     exit 0
   fi
   git push -u origin main
@@ -58,7 +59,8 @@ echo "Sichtbarkeit: ${BOLD}private${RESET}"
 echo ""
 read -p "OK? [Y/n] " confirm
 confirm="${confirm:-y}"
-if [[ "${confirm,,}" != "y" ]]; then
+confirm_lc="$(printf '%s' "$confirm" | tr '[:upper:]' '[:lower:]')"
+if [[ "$confirm_lc" != "y" ]]; then
   exit 0
 fi
 

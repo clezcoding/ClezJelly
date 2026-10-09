@@ -58,7 +58,9 @@ prompt_yes_no() {
   while true; do
     read -r -p "  ${BOLD}?${RESET} $prompt $hint " answer
     answer="${answer:-$default}"
-    case "${answer,,}" in
+    # bash 3.2 kompatibel (macOS-Default): tr statt ${var,,}
+    answer_lc="$(printf '%s' "$answer" | tr '[:upper:]' '[:lower:]')"
+    case "$answer_lc" in
       y|yes|j|ja) return 0 ;;
       n|no|nein)  return 1 ;;
       *) echo "    ${DIM}Bitte y oder n eingeben.${RESET}" ;;
