@@ -11,7 +11,7 @@ services:
   # Web-UI: http://localhost:8080
   # ─────────────────────────────────────────────────────────────────
   altmount:
-    image: ghcr.io/kipsilabs/altmount:latest
+    image: ghcr.io/kipsilabs/altmount:dev-arm64-temp
     container_name: clezjelly-altmount
     restart: unless-stopped
     networks:

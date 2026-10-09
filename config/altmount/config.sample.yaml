@@ -1,0 +1,60 @@
+# ──────────────────────────────────────────────────────────────────
+# AltMount Beispiel-Konfiguration für ClezJelly
+# ──────────────────────────────────────────────────────────────────
+# Die eigentliche Config wird über die Web-UI unter http://localhost:8080
+# erstellt. Diese Datei dient als Referenz, wie die Settings aussehen.
+# ──────────────────────────────────────────────────────────────────
+
+# ── Authentication ────────────────────────────────────────────────
+auth:
+  login_required: true
+
+# ── NNTP Providers ────────────────────────────────────────────────
+# Trägst du über die Web-UI ein (Configuration > Providers)
+providers:
+  # Primary: Eweka (NL-Backbone, EU-schnell für AT)
+  - host: ssl-eu.eweka.nl
+    port: 563
+    username: YOUR_EWEKA_USERNAME
+    password: YOUR_EWEKA_PASSWORD
+    max_connections: 20
+    tls: true
+    inflight_requests: 10
+    enabled: true
+
+# ── SABnzbd-Kompatibilität ────────────────────────────────────────
+# Macht AltMount für Radarr/Sonarr als SABnzbd-Download-Client sichtbar
+sabnzbd:
+  enabled: true
+  categories:
+    - name: movies
+      type: radarr
+    - name: tv
+      type: sonarr
+
+# ── ARR Integration ───────────────────────────────────────────────
+arrs:
+  enabled: true
+  queue_cleanup_enabled: true
+  queue_cleanup_interval_seconds: 300
+  queue_cleanup_grace_period_minutes: 5
+  queue_cleanup_rules:
+    - message: "Sample"
+      enabled: true
+      action: blocklist_search
+    - message: "Not a Custom Format upgrade"
+      enabled: true
+      action: remove
+
+# ── Import Strategy: STRM ─────────────────────────────────────────
+# STRM = Jellyfin-tauglich, keine FUSE auf macOS nötig
+mount_path: http://localhost:8080
+import:
+  import_strategy: STRM
+  import_dir: /strm
+
+# ── Health Monitoring ─────────────────────────────────────────────
+# Checkt automatisch kaputte Streams und sucht neu
+health:
+  enabled: true
+  check_interval_hours: 24

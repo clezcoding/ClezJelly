@@ -53,7 +53,7 @@ Navigiere zu **Configuration → Import**:
 - Save
 
 Navigiere zu **Configuration → General** (oben):
-- Mount Path: `http://altmount:8080` (ohne Trailing Slash)
+- Mount Path: `http://localhost:8080` (ohne Trailing Slash — wichtig: `localhost`, da Jellyfin nativ auf macOS läuft und den internen Docker-Namen `altmount` nicht auflösen kann!)
 - Save
 
 ### 1.4 Mount Type: None
@@ -260,7 +260,7 @@ Dasselbe in **Sonarr**:
 **Filme:**
 - Inhaltstyp: Filme
 - Anzeigename: `Filme`
-- Ordner: Durchsuchen → `/Users/puzzless/Desktop/ClezJelly/data/strm/movies`
+- Ordner: Durchsuchen → `~/Desktop/ClezJelly/data/media/movies` (oder `data/strm/movies`)
 - Sprache: Deutsch
 - Metadaten-Downloader: TheMovieDb aktivieren
 - Fanart.tv aktivieren
@@ -269,7 +269,7 @@ Dasselbe in **Sonarr**:
 **Serien:**
 - Inhaltstyp: Fernsehserien
 - Anzeigename: `Serien`
-- Ordner: `/Users/puzzless/Desktop/ClezJelly/data/strm/tv`
+- Ordner: `~/Desktop/ClezJelly/data/media/tv` (oder `data/strm/tv`)
 - Rest analog
 
 ### 7.3 Hardware-Transcoding

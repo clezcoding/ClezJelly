@@ -16,10 +16,12 @@ check_url() {
   local name="$1"
   local url="$2"
   local port="$3"
-  if curl -sSf -o /dev/null --max-time 3 "$url" 2>/dev/null; then
+  local code
+  code=$(curl -s -L -o /dev/null -w "%{http_code}" --max-time 3 "$url" 2>/dev/null || echo "000")
+  if [[ "$code" =~ ^[23] ]] || [[ "$code" == "401" ]] || [[ "$code" == "403" ]]; then
     printf "  ${GREEN}✓${RESET} ${BOLD}%-14s${RESET} ${DIM}%-30s${RESET} ${GREEN}OK${RESET}\n" "$name" "$url"
   elif nc -z localhost "$port" 2>/dev/null; then
-    printf "  ${YELLOW}~${RESET} ${BOLD}%-14s${RESET} ${DIM}%-30s${RESET} ${YELLOW}Port offen, HTTP schweigt${RESET}\n" "$name" "$url"
+    printf "  ${YELLOW}~${RESET} ${BOLD}%-14s${RESET} ${DIM}%-30s${RESET} ${YELLOW}Port offen, HTTP schweigt (Code $code)${RESET}\n" "$name" "$url"
   else
     printf "  ${RED}✗${RESET} ${BOLD}%-14s${RESET} ${DIM}%-30s${RESET} ${RED}DOWN${RESET}\n" "$name" "$url"
   fi

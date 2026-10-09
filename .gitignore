@@ -9,6 +9,8 @@
 
 # Service-Configs (enthalten API-Keys, Passwörter)
 config/*
+!config/altmount/
+config/altmount/*
 !config/altmount/config.sample.yaml
 !config/.gitkeep
 
