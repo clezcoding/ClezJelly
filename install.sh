@@ -6,7 +6,9 @@
 # ║                                                                  ║
 # ╚══════════════════════════════════════════════════════════════════╝
 
-set -euo pipefail
+# -u raus: Interaktive read-Dialoge und optionale Env-Vars sollen keine
+# Unbound-Variable-Errors werfen. Fehlerstrictheit via -e + pipefail bleibt.
+set -eo pipefail
 
 # ── Farben ────────────────────────────────────────────────────────
 readonly RESET=$'\033[0m'

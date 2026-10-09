@@ -12,7 +12,9 @@
 # ║     CLEZJELLY_BRANCH       → anderer Branch (default: main)      ║
 # ╚══════════════════════════════════════════════════════════════════╝
 
-set -euo pipefail
+# Hinweis: Kein `set -u` — Env-Variablen wie CLEZJELLY_TARGET_DIR können
+# ungesetzt sein, und das soll kein Fehler sein (nutzt dann den Default).
+set -eo pipefail
 
 # ── Farben ────────────────────────────────────────────────────────
 RESET=$'\033[0m'
@@ -25,6 +27,7 @@ CYAN=$'\033[0;36m'
 MAGENTA=$'\033[0;35m'
 
 # ── Config ────────────────────────────────────────────────────────
+: "${HOME:?HOME ist nicht gesetzt — kann nicht fortfahren}"
 REPO_URL="https://github.com/clezcoding/ClezJelly.git"
 TARGET_DIR="${CLEZJELLY_TARGET_DIR:-$HOME/Desktop/ClezJelly}"
 BRANCH="${CLEZJELLY_BRANCH:-main}"
