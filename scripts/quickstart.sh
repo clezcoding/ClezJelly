@@ -6,6 +6,10 @@
 # ║   Aufruf:                                                        ║
 # ║     bash <(curl -fsSL https://raw.githubusercontent.com/\       ║
 # ║       clezcoding/ClezJelly/main/scripts/quickstart.sh)           ║
+# ║                                                                  ║
+# ║   Optional (Env-Vars):                                           ║
+# ║     CLEZJELLY_TARGET_DIR   → anderer Zielordner                  ║
+# ║     CLEZJELLY_BRANCH       → anderer Branch (default: main)      ║
 # ╚══════════════════════════════════════════════════════════════════╝
 
 set -euo pipefail
@@ -21,8 +25,7 @@ CYAN=$'\033[0;36m'
 MAGENTA=$'\033[0;35m'
 
 # ── Config ────────────────────────────────────────────────────────
-REPO_OWNER="${CLEZJELLY_REPO_OWNER:-clezcoding}"
-REPO_NAME="${CLEZJELLY_REPO_NAME:-ClezJelly}"
+REPO_URL="https://github.com/clezcoding/ClezJelly.git"
 TARGET_DIR="${CLEZJELLY_TARGET_DIR:-$HOME/Desktop/ClezJelly}"
 BRANCH="${CLEZJELLY_BRANCH:-main}"
 
@@ -75,20 +78,6 @@ if ! command -v git &>/dev/null; then
 fi
 ok "git verfügbar"
 
-# gh — zum Klonen von privaten Repos
-HAS_GH=false
-if command -v gh &>/dev/null; then
-  HAS_GH=true
-  if ! gh auth status &>/dev/null; then
-    warn "GitHub CLI vorhanden, aber nicht eingeloggt."
-    log "Starte Login (öffnet Browser)…"
-    gh auth login -h github.com -p https -w
-  fi
-  ok "gh authentifiziert ($(gh auth status 2>&1 | grep -o 'account [^ ]*' | head -1))"
-else
-  info "gh CLI nicht installiert — werde public clone versuchen"
-fi
-
 echo ""
 
 # ── Target directory prüfen ───────────────────────────────────────
@@ -109,11 +98,7 @@ if [[ -e "$TARGET_DIR" ]]; then
 else
   log "Klone Repo nach $TARGET_DIR…"
   mkdir -p "$(dirname "$TARGET_DIR")"
-  if $HAS_GH; then
-    gh repo clone "$REPO_OWNER/$REPO_NAME" "$TARGET_DIR" -- --branch "$BRANCH"
-  else
-    git clone --branch "$BRANCH" "https://github.com/$REPO_OWNER/$REPO_NAME.git" "$TARGET_DIR"
-  fi
+  git clone --branch "$BRANCH" "$REPO_URL" "$TARGET_DIR"
   ok "Repo geklont"
 fi
 

@@ -107,13 +107,17 @@ Zum Vergleich: Netflix Standard = €13,99/Monat.
 
 ### One-Line Quick Install (frisches MacBook)
 
-Auf einem neuen MacBook — klont das Repo, legt los. Voraussetzung: [Homebrew](https://brew.sh) + [GitHub CLI](https://cli.github.com) (`brew install gh && gh auth login`).
+Klont das Repo nach `~/Desktop/ClezJelly` und startet den Installer. Einzige Voraussetzung: [Homebrew](https://brew.sh).
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/clezcoding/ClezJelly/main/scripts/quickstart.sh)
 ```
 
-Falls das Repo privat ist (Default), nutzt der One-Liner oben automatisch `gh` für die Authentifizierung.
+Optional kann der Zielordner per Env-Variable überschrieben werden:
+
+```bash
+CLEZJELLY_TARGET_DIR=~/Code/ClezJelly bash <(curl -fsSL …)
+```
 
 ### Manueller Schnellstart (Repo schon da)
 
