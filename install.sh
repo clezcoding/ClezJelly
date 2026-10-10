@@ -209,7 +209,7 @@ action_relink() {
   components_derive
   credentials_load || return 1
   services_link || true
-  guide_generate && log_info "Guide page updated. Open it with: ./install.sh guide"
+  guide_open || true
 }
 
 action_german() {
