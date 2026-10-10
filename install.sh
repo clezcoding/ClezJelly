@@ -343,6 +343,7 @@ action_help() {
   components   choose optional services and LAN exposure
   credentials  change provider, indexers or keys
   relink       repair the connections between services
+  speedtest    measure provider speed and tune streaming
   guide        open the "what now?" page in your browser
   german       apply the German release formats
   rebuild      re-seed config files from templates (with backup)
@@ -415,6 +416,30 @@ main_menu() {
 
 components_load
 
+# Measures the line to your Usenet provider and lets AltMount pick the best
+# pipelining depth. Streams only run as fast as this number allows.
+action_speedtest() {
+  ui_title "Speed test"
+  local url="http://localhost:8080" id="provider_primary" r w
+  curl -sf --max-time 5 "$url/" >/dev/null 2>&1 || { log_err "AltMount isn't reachable. Start the stack: ./install.sh up"; return 1; }
+  log_info "Testing the download speed to your provider (up to a minute)…"
+  r="$(curl -s --max-time 330 -X POST "$url/api/providers/$id/speedtest" 2>/dev/null)"
+  if jq -e '.data.speed_mbps' <<<"$r" >/dev/null 2>&1; then
+    log_ok "Provider speed: $(jq -r '.data.speed_mbps * 8 | floor' <<<"$r") Mbit/s  ($(jq -r '.data.speed_mbps * 10 | floor / 10' <<<"$r") MB/s)"
+  else
+    log_warn "Speed test failed: $(printf '%.160s' "$r")"
+  fi
+  log_info "Tuning pipelining (up to 3 minutes)…"
+  r="$(curl -s --max-time 200 -X POST "$url/api/providers/$id/tune-pipeline" 2>/dev/null)"
+  if jq -e '.data.recommended_inflight' <<<"$r" >/dev/null 2>&1; then
+    log_ok "Best pipelining depth: $(jq -r '.data.recommended_inflight' <<<"$r")  (baseline $(jq -r '.data.baseline_mbps|floor' <<<"$r") → best $(jq -r '.data.best_mbps|floor' <<<"$r") Mbit/s)"
+    w="$(jq -r '.data.warning // empty' <<<"$r")"; [[ -n "$w" ]] && log_warn "$w"
+  else
+    log_warn "Tuning failed: $(printf '%.160s' "$r")"
+  fi
+  log_info "Your line is about 40 Mbit/s: prefer releases below ~25 Mbit/s (1080p WEB-DL, no remux/4K)."
+}
+
 case "${1:-}" in
   "")          main_menu ;;
   install)     run action_install ;;
@@ -422,6 +447,7 @@ case "${1:-}" in
   credentials) run action_credentials ;;
   relink)      run action_relink ;;
   guide)       run action_guide ;;
+  speedtest)   run action_speedtest ;;
   german)      run action_german ;;
   rebuild)     run action_rebuild ;;
   status)      run action_status ;;

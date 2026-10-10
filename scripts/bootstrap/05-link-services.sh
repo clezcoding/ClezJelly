@@ -88,6 +88,61 @@ link_prowlarr_app() {
   _upsert "$PROWLARR_URL/api/v1/applications" "$PROWLARR_URL/api/v1/applications/schema" "$PROWLARR_API_KEY" "$impl" "$impl"
 }
 
+# ── Bandwidth guard ───────────────────────────────────────────────
+# A stream can only be as fast as the line. Remuxes and 4K discs run at
+# 30-80 Mbit/s and buffer forever on a 40 Mbit/s connection. We
+#   1. cap the allowed size per minute for 1080p/720p qualities (~15 Mbit/s), and
+#   2. add a custom format "Too heavy" (remux / 2160p / UHD) scored -10000,
+#      which keeps such releases below the profile's minimum score.
+RE_HEAVY='(?<![a-z0-9])(remux|2160p|uhd|4k)(?![a-z0-9])'
+
+_cap_sizes() {
+  local base="$1" key="$2" defs payload
+  defs="$(arr_request GET "$base/api/v3/qualitydefinition" "$key")" || return 1
+  payload="$(jq -c '
+      map(if (.quality.name | test("1080p")) and (.quality.name | test("Remux") | not)
+            then .maxSize = 110 | .preferredSize = 60
+          elif (.quality.name | test("720p")) then .maxSize = 60 | .preferredSize = 30
+          else . end)' <<<"$defs")" || return 1
+  arr_request PUT "$base/api/v3/qualitydefinition/update" "$key" "$payload" >/dev/null || return 1
+}
+
+_penalize_heavy() {
+  local base="$1" key="$2" wanted="$3" schema specs rc profiles cfs profile id payload
+  schema="$(arr_request GET "$base/api/v3/customformat/schema" "$key")" || return 1
+  specs="[$(_spec "$schema" ReleaseTitleSpecification "Heavy" false true "$(jq -Rn --arg v "$RE_HEAVY" '$v')")]"
+  rc=0; _ensure_cf "$base" "$key" "Too heavy" "$specs" || rc=$?
+  [[ "$rc" -eq 0 || "$rc" -eq "$API_EXISTS" ]] || return 1
+  profiles="$(arr_request GET "$base/api/v3/qualityprofile" "$key")" || return 1
+  cfs="$(arr_request GET "$base/api/v3/customformat" "$key")" || return 1
+  profile="$(jq -c --arg n "$wanted" '(first(.[] | select(.name == $n))) // .[0]' <<<"$profiles")"
+  [[ -n "$profile" && "$profile" != "null" ]] || return 1
+  id="$(jq -r '.id' <<<"$profile")"
+  payload="$(jq -c --argjson cfs "$cfs" '
+      .formatItems as $old
+      | .formatItems = [ $cfs[] | . as $cf | {
+          format: $cf.id, name: $cf.name,
+          score: (if $cf.name == "Too heavy" then -10000
+                  else (first($old[]? | select(.format == $cf.id) | .score) // 0) end) } ]
+      | .minFormatScore = (if (.minFormatScore // 0) < 0 then 0 else (.minFormatScore // 0) end)' <<<"$profile")" || return 1
+  arr_request PUT "$base/api/v3/qualityprofile/$id" "$key" "$payload" >/dev/null || return 1
+}
+
+bandwidth_guard_apply() {
+  log_step "Bandwidth guard"
+  local app base key pname
+  case "${QUALITY_PROFILE:-1080p-webdl}" in
+    2160p-webdl) log_info "4K profile selected — bandwidth guard skipped"; return 0 ;;
+    720p-webdl)  pname="HD-720p" ;;
+    *)           pname="HD-1080p" ;;
+  esac
+  for app in Radarr Sonarr; do
+    if [[ "$app" == "Radarr" ]]; then base="$RADARR_URL"; key="$RADARR_API_KEY"; else base="$SONARR_URL"; key="$SONARR_API_KEY"; fi
+    if _cap_sizes "$base" "$key"; then log_ok "$app · 1080p capped at ~15 Mbit/s"; else log_warn "$app · couldn't cap sizes (details in $UI_LOG)"; fi
+    if _penalize_heavy "$base" "$key" "$pname"; then log_ok "$app · remux / 4K releases blocked on \"$pname\""; else log_warn "$app · couldn't add the remux filter (details in $UI_LOG)"; fi
+  done
+}
+
 # ── Radarr / Sonarr ───────────────────────────────────────────────
 
 # link_root_folder <base_url> <api_key> <path>
@@ -296,6 +351,7 @@ _services_link_run() {
   fi
 
   # ── Optional parts ──
+  bandwidth_guard_apply
   if [[ "$ENABLE_GERMAN" == "true" ]]; then german_formats_apply; fi
   if [[ "$ENABLE_SEERR" == "true" ]];  then seerr_prewire; fi
 }
