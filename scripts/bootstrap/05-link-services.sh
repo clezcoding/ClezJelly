@@ -114,10 +114,37 @@ _persist_altmount_key() {
   chmod 600 "$CREDS_FILE"; rm -f "$plain" "$plain.new"
 }
 
+_altmount_key_ok() {
+  local resp
+  resp="$(curl -s --max-time 8 "$ALTMOUNT_URL/sabnzbd/api?mode=version&output=json&apikey=$ALTMOUNT_API_KEY" 2>>"$UI_LOG" || true)"
+  jq -e 'has("version")' <<<"$resp" >/dev/null 2>&1
+}
+
+# AltMount only honours api.key_override when it is exactly 32 characters.
+# Older ClezJelly versions generated 33, so such a key is silently ignored.
+# Swap in a 32-char key: stop AltMount, patch its config, start it again.
+_altmount_migrate_key() {
+  local cfg="$CLEZJELLY_ROOT/config/altmount/config.yaml" new i
+  [[ -f "$cfg" ]] || return 1
+  new="$(gen_api_key)"
+  printf 'AltMount key has %s chars (needs 32) → replacing\n' "${#ALTMOUNT_API_KEY}" >>"$UI_LOG"
+  ( cd "$CLEZJELLY_ROOT" && docker compose stop altmount >>"$UI_LOG" 2>&1 ) || return 1
+  sed "s|^\([[:space:]]*key_override:\).*|\1 '$new'|" "$cfg" > "$cfg.new" && mv "$cfg.new" "$cfg"
+  ( cd "$CLEZJELLY_ROOT" && docker compose start altmount >>"$UI_LOG" 2>&1 ) || return 1
+  for _ in $(seq 1 30); do
+    curl -sf --max-time 3 "$ALTMOUNT_URL/api/health" >/dev/null 2>&1 && break
+    curl -s --max-time 3 -o /dev/null "$ALTMOUNT_URL/" 2>/dev/null && break
+    sleep 2
+  done
+  ALTMOUNT_API_KEY="$new"; export ALTMOUNT_API_KEY
+  _persist_altmount_key || printf 'could not update the encrypted copy of the AltMount key\n' >>"$UI_LOG"
+}
+
 altmount_sync_key() {
   local resp new
+  if _altmount_key_ok; then return 0; fi
+  if [[ ${#ALTMOUNT_API_KEY} -ne 32 ]] && _altmount_migrate_key && _altmount_key_ok; then return 0; fi
   resp="$(curl -s --max-time 8 "$ALTMOUNT_URL/sabnzbd/api?mode=version&output=json&apikey=$ALTMOUNT_API_KEY" 2>>"$UI_LOG" || true)"
-  if jq -e 'has("version")' <<<"$resp" >/dev/null 2>&1; then return 0; fi
   printf 'AltMount rejected our API key (%.60s) → regenerating\n' "$resp" >>"$UI_LOG"
   resp="$(curl -s --max-time 15 -X POST "$ALTMOUNT_URL/api/user/api-key/regenerate" 2>>"$UI_LOG" || true)"
   new="$(jq -r '(.data.api_key // .api_key // empty)' <<<"$resp" 2>/dev/null || true)"

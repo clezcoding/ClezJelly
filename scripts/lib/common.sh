@@ -107,7 +107,7 @@ find_root() {
 
 # ── Random secrets ────────────────────────────────────────────────
 gen_api_key()    { openssl rand -hex 16; }                      # 32 hex chars (*arr style)
-gen_api_key_33() { openssl rand -hex 17 | cut -c1-33; }         # AltMount wants exactly 33
+gen_api_key_33() { openssl rand -hex 16; }                      # legacy name: AltMount validates key_override at exactly 32 chars
 gen_jwt_secret() { openssl rand -hex 32; }
 
 # ── Templating (no gettext needed) ────────────────────────────────

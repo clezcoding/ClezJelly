@@ -14,7 +14,7 @@ webdav:
 
 api:
   prefix: '/api'
-  key_override: '${ALTMOUNT_API_KEY}'   # also the key Radarr/Sonarr use for the SABnzbd API
+  key_override: '${ALTMOUNT_API_KEY}'   # exactly 32 chars or AltMount ignores it; also the key Radarr/Sonarr use for the SABnzbd API
 
 auth:
   login_required: false           # reachable only on localhost unless "AltMount on LAN" is on
