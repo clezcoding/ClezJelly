@@ -100,6 +100,36 @@ link_root_folder() {
   arr_request POST "$base/api/v3/rootfolder" "$key" "$(jq -nc --arg p "$path" '{path: $p}')" >/dev/null || return 1
 }
 
+# With "login_required: false" AltMount validates SABnzbd calls against the key
+# stored for its built-in admin user, not our api.key_override. If our key is
+# rejected we ask AltMount for a fresh valid one (POST /api/user/api-key/regenerate,
+# which also rewrites key_override), use it, and keep our encrypted copy in sync.
+_persist_altmount_key() {
+  [[ -n "${CLEZ_PASSPHRASE:-}" && -f "$CREDS_FILE" ]] || return 1
+  local plain; plain="$(mktemp)"; chmod 600 "$plain"
+  crypto_decrypt_file "$CREDS_FILE" "$CLEZ_PASSPHRASE" > "$plain" 2>>"$UI_LOG"
+  [[ -s "$plain" ]] || { rm -f "$plain"; return 1; }
+  { grep -v '^ALTMOUNT_API_KEY=' "$plain"; printf 'ALTMOUNT_API_KEY=%s\n' "$ALTMOUNT_API_KEY"; } > "$plain.new"
+  crypto_encrypt_file "$plain.new" "$CREDS_FILE" "$CLEZ_PASSPHRASE" 2>>"$UI_LOG"
+  chmod 600 "$CREDS_FILE"; rm -f "$plain" "$plain.new"
+}
+
+altmount_sync_key() {
+  local resp new
+  resp="$(curl -s --max-time 8 "$ALTMOUNT_URL/sabnzbd/api?mode=version&output=json&apikey=$ALTMOUNT_API_KEY" 2>>"$UI_LOG" || true)"
+  if jq -e 'has("version")' <<<"$resp" >/dev/null 2>&1; then return 0; fi
+  printf 'AltMount rejected our API key (%.60s) → regenerating\n' "$resp" >>"$UI_LOG"
+  resp="$(curl -s --max-time 15 -X POST "$ALTMOUNT_URL/api/user/api-key/regenerate" 2>>"$UI_LOG" || true)"
+  new="$(jq -r '(.data.api_key // .api_key // empty)' <<<"$resp" 2>/dev/null || true)"
+  if [[ -z "$new" ]]; then
+    printf 'AltMount key regenerate failed: %.200s\n' "$resp" >>"$UI_LOG"
+    return 1
+  fi
+  ALTMOUNT_API_KEY="$new"; export ALTMOUNT_API_KEY
+  _persist_altmount_key || printf 'could not update the encrypted copy of the AltMount key\n' >>"$UI_LOG"
+  return 0
+}
+
 # AltMount can register itself as a SABnzbd client in Radarr/Sonarr
 # (POST /api/arrs/download-client/register). We let it do that once and then
 # read the URL base it chose, so we never have to guess AltMount's API path.
@@ -208,6 +238,14 @@ _services_link_run() {
     log_ok "Indexers pushed to Radarr and Sonarr"
   fi
 
+  # ── AltMount API key (must be valid before Radarr/Sonarr use it) ──
+  log_step "AltMount"
+  if altmount_sync_key; then
+    log_ok "AltMount API key verified"
+  else
+    log_warn "AltMount API key not accepted: see logs/clezjelly.log"
+  fi
+
   # ── Radarr ──
   log_step "Radarr"
   rc=0; link_root_folder "$RADARR_URL" "$RADARR_API_KEY" "/data/library/movies" || rc=$?
@@ -222,8 +260,8 @@ _services_link_run() {
   rc=0; link_download_client "$SONARR_URL" "$SONARR_API_KEY" "tvCategory" "tv" || rc=$?
   _report "Download client AltMount (altmount:8080 · tv)" "$rc"
 
-  # ── AltMount ──
-  log_step "AltMount"
+  # ── AltMount webhooks ──
+  log_step "AltMount webhooks"
   if altmount_register_webhooks; then
     log_ok "Import webhooks registered in Radarr and Sonarr"
   else

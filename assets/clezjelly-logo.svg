@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="768" height="768" viewBox="0 0 768 768">
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#030326"/>
+      <stop offset=".48" stop-color="#03113b"/>
+      <stop offset="1" stop-color="#052b59"/>
+    </linearGradient>
+    <linearGradient id="dome" x1=".2" y1="0" x2=".75" y2="1">
+      <stop offset="0" stop-color="#5beaff"/>
+      <stop offset=".42" stop-color="#12b9ee"/>
+      <stop offset="1" stop-color="#008bd1"/>
+    </linearGradient>
+    <linearGradient id="domeEdge" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f4ffff"/>
+      <stop offset=".48" stop-color="#a7f5ff"/>
+      <stop offset="1" stop-color="#58dffb"/>
+    </linearGradient>
+    <linearGradient id="tentacleA" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#b7fbff"/>
+      <stop offset="1" stop-color="#70d9f5"/>
+    </linearGradient>
+    <linearGradient id="tentacleB" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#00b9ef"/>
+      <stop offset="1" stop-color="#0871b9"/>
+    </linearGradient>
+    <linearGradient id="shine" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#b8faff"/>
+    </linearGradient>
+    <clipPath id="tileClip"><rect x="201" y="200" width="360" height="359" rx="37"/></clipPath>
+  </defs>
+  <rect width="768" height="768" fill="#000"/>
+  <g>
+    <rect x="201" y="200" width="360" height="359" rx="37" fill="url(#tile)"/>
+    <path d="M203 523V237Q203 202 239 202H523Q559 202 559 238V523Q559 556 526 557H238Q203 557 203 523Z" fill="none" stroke="#07102d" stroke-width="1.5" opacity=".8"/>
+    <g clip-path="url(#tileClip)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <!-- jellyfish bell: luminous outer rim -->
+      <path d="M325 335 C326 300 349 275 381 275 C413 275 437 300 439 334
+               C439 340 434 343 429 342 C423 341 421 335 420 329
+               C418 319 412 318 408 325 C406 329 408 338 401 341
+               C395 344 390 339 390 332 C390 324 386 320 381 320
+               C375 320 372 325 372 333 C372 340 367 344 361 341
+               C355 338 359 328 354 324 C349 320 343 323 341 331
+               C339 339 335 344 329 342 C325 341 323 338 325 335Z"
+            fill="#006eaa" opacity=".48" stroke="#073f78" stroke-width="2"/>
+      <path d="M325 331 C327 299 350 275 382 275 C414 275 437 299 439 331
+               C440 339 435 343 429 342 C423 341 421 335 420 329
+               C418 320 413 317 408 323 C405 327 408 338 401 341
+               C395 344 390 339 390 332 C390 324 386 320 381 320
+               C375 320 372 325 372 333 C372 340 367 344 361 341
+               C355 338 359 328 354 324 C349 320 343 323 341 331
+               C339 339 335 343 329 342 C325 341 323 337 325 331Z"
+            fill="url(#dome)" stroke="url(#domeEdge)" stroke-width="8" />
+      <!-- dome inner lower scallop -->
+      <path d="M332 331 C335 324 340 321 346 321
+               M356 321 C363 320 365 326 365 333
+               M378 321 C385 320 386 326 386 333
+               M400 321 C406 320 410 324 410 331
+               M421 326 C424 330 425 335 429 337"
+            stroke="#0879ba" stroke-width="5"/>
+      <!-- specular glint -->
+      <path d="M337 306 C341 297 349 291 358 289" stroke="url(#shine)" stroke-width="8"/>
+      <!-- tentacles -->
+      <path d="M342 356 C342 382 338 399 326 417 C324 420 322 422 321 423"
+            stroke="url(#tentacleA)" stroke-width="10"/>
+      <path d="M362 356 C363 387 359 408 349 430 C344 442 344 458 357 471"
+            stroke="url(#tentacleA)" stroke-width="10"/>
+      <path d="M382 356 C382 382 382 400 373 420 C368 431 365 437 368 443"
+            stroke="url(#tentacleA)" stroke-width="10"/>
+      <path d="M401 356 C402 383 401 404 391 424 C383 441 378 453 382 470"
+            stroke="url(#tentacleB)" stroke-width="10"/>
+      <path d="M422 356 C422 381 424 399 435 416 C437 419 440 422 443 423"
+            stroke="url(#tentacleB)" stroke-width="10"/>
+      <!-- overlapping, darker flowing strands -->
+      <path d="M374 400 C370 420 358 436 350 448 C344 458 347 466 354 473"
+            stroke="#65dff5" stroke-width="9" opacity=".9"/>
+      <path d="M400 414 C398 432 387 444 384 456 C381 463 383 469 386 474"
+            stroke="#078acb" stroke-width="10"/>
+      <path d="M410 423 C407 438 416 450 411 461 C409 466 405 470 402 472"
+            stroke="#07508b" stroke-width="9" opacity=".8"/>
+      <path d="M420 405 C422 424 433 435 434 446" stroke="#063f79" stroke-width="9" opacity=".65"/>
+      <path d="M365 433 C363 440 365 446 369 450" stroke="#d7ffff" stroke-width="5" opacity=".7"/>
+    </g>
+  </g>
+</svg>
