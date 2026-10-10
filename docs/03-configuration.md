@@ -67,7 +67,7 @@ AltMount's web UI (`localhost:8080`) edits the same config file. Changes made th
 ### Radarr and Sonarr
 
 - Root folders: `/data/library/movies` and `/data/library/tv`.
-- Download client: **AltMount**, implementation *Sabnzbd*, host `altmount`, port `8080`, category `movies` or `tv`. The installer asks AltMount which URL base its SABnzbd API answers on and fills it in.
+- Download client: **AltMount**, implementation *Sabnzbd*, host `altmount`, port `8080`, category `movies` or `tv`. The installer lets AltMount register itself once (so it picks the right API path), then sets the host to `altmount` and fills in the key and category.
 - Quality profile: your 1080p profile (`HD-1080p`) is used by Seerr. With German formats on, custom-format scores are added to it ([04](04-german-content.md)).
 - Naming: Radarr/Sonarr defaults. Change in *Settings → Media Management*.
 

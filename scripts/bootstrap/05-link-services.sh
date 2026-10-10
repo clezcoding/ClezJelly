@@ -100,9 +100,30 @@ link_root_folder() {
   arr_request POST "$base/api/v3/rootfolder" "$key" "$(jq -nc --arg p "$path" '{path: $p}')" >/dev/null || return 1
 }
 
-# Find the URL base under which AltMount answers SABnzbd's "version" call.
+# AltMount can register itself as a SABnzbd client in Radarr/Sonarr
+# (POST /api/arrs/download-client/register). We let it do that once and then
+# read the URL base it chose, so we never have to guess AltMount's API path.
+ALTMOUNT_REG_DONE=0
+altmount_register_client() {
+  [[ "$ALTMOUNT_REG_DONE" == "1" ]] && return 0
+  ALTMOUNT_REG_DONE=1
+  local code
+  code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 -X POST "$ALTMOUNT_URL/api/arrs/download-client/register" 2>>"$UI_LOG" || echo 000)"
+  printf 'AltMount self-register → HTTP %s\n' "$code" >>"$UI_LOG"
+  [[ "$code" =~ ^2 ]]
+}
+
+# URL base of the SABnzbd client AltMount registered in <arr base> (prints it, may be empty)
+_registered_urlbase() {
+  local base="$1" key="$2" list ub
+  list="$(arr_request GET "$base/api/v3/downloadclient" "$key")" || return 1
+  ub="$(jq -r '[.[] | select(.implementation == "Sabnzbd") | .fields[]? | select(.name == "urlBase") | .value][0] // "__none__"' <<<"$list" 2>/dev/null)" || return 1
+  [[ "$ub" == "__none__" ]] && return 1
+  printf '%s' "$ub"
+}
+
+# Fallback: probe the usual paths for SABnzbd's "version" call.
 # Radarr/Sonarr call <urlBase>/api, so /sabnzbd/api -> urlBase "/sabnzbd".
-# Prints the base (may be empty) or returns 1 if nothing answered.
 altmount_sab_urlbase() {
   local base resp
   for base in "/sabnzbd" "/api/sabnzbd" "" "/api"; do
@@ -119,7 +140,10 @@ altmount_sab_urlbase() {
 # category_field: movieCategory (Radarr) or tvCategory (Sonarr)
 link_download_client() {
   local base="$1" key="$2" catfield="$3" cat="$4" ub
-  ub="$(altmount_sab_urlbase)" || { printf 'AltMount SABnzbd API not found on any known path\n' >>"$UI_LOG"; return 1; }
+  altmount_register_client || true
+  ub="$(_registered_urlbase "$base" "$key")" \
+    || ub="$(altmount_sab_urlbase)" \
+    || { printf 'AltMount SABnzbd API not found: self-register and probes failed\n' >>"$UI_LOG"; return 1; }
   JQ_ARGS=(--arg key "$ALTMOUNT_API_KEY" --arg catfield "$catfield" --arg cat "$cat" --arg ub "$ub")
   JQ_FILTER='
     .name = "AltMount" | .enable = true | .priority = 1 | .tags = []

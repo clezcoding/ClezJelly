@@ -70,7 +70,7 @@ Lower the max connections to about 10, and make sure nothing else is using your 
 ### "No download client available" or the download client test fails
 - Host must be `altmount`, port `8080`. **Never `localhost`**: inside a container that's the container itself.
 - API key must match AltMount's. Run **Re-link** to resync.
-- "Unexpected character `<`" in the log means the request hit AltMount's web page instead of its download API. Re-link probes the known API paths and picks the one that answers; `logs/clezjelly.log` lists every probe (`SAB probe …`). If none answers, open an issue with those lines.
+- "Unexpected character `<`" in the log means the request hit AltMount's web page instead of its download API. Re-link first lets AltMount register itself in Radarr/Sonarr (its documented `/api/arrs/download-client/register`) and reuses the URL base it chose. If that fails it probes the known API paths; `logs/clezjelly.log` lists every probe (`SAB probe …`). If none answers, open an issue with those lines.
 - AltMount must be **healthy** first: `docker compose logs --tail 30 altmount`.
 - Category: `movies` in Radarr and `tv` in Sonarr.
 
