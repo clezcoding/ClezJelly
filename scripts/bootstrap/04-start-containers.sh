@@ -57,7 +57,12 @@ containers_start() {
   _remove_disabled_services
 
   log_step "Waiting for services"
-  ui_wait "AltMount" "http://localhost:8080"           150 || true
+  if ! ui_wait "AltMount" "http://localhost:8080" 150; then
+    log_err "AltMount did not start. Last log lines:"
+    docker compose logs --tail 15 altmount 2>&1 | sed 's/^/      /' | tee -a "$UI_LOG" || true
+    log_info "Fix the cause, then run: ./install.sh relink"
+    return 1
+  fi
   ui_wait "Prowlarr" "http://localhost:9696/ping"      150 || true
   ui_wait "Radarr"   "http://localhost:7878/ping"      150 || true
   ui_wait "Sonarr"   "http://localhost:8989/ping"      150 || true

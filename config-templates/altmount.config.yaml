@@ -40,7 +40,7 @@ import:
   import_strategy: 'STRM'         # write .strm files, no FUSE needed on macOS
   import_dir: '/data/strm'        # staging area; Radarr/Sonarr move files into /data/library
 
-mount_path: 'http://${PUBLIC_HOST}:8080'
+mount_path: '/mnt/altmount'      # must be absolute; unused in STRM mode (no FUSE mount)
 
 sabnzbd:
   enabled: true

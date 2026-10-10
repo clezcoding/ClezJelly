@@ -162,7 +162,7 @@ action_install() {
 
 action_components() {
   local before_host after_host
-  before_host="$(sed -n "s|^mount_path: 'http://\(.*\):8080'.*|\1|p" config/altmount/config.yaml 2>/dev/null || true)"
+  before_host="$(sed -n "s|^  host: '\(.*\)' .*|\1|p" config/altmount/config.yaml 2>/dev/null || true)"
   components_screen
   echo ""
   [[ -f "$CREDS_FILE" ]] || { log_info "Saved. They take effect during the install."; return 0; }
