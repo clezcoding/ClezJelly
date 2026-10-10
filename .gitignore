@@ -1,41 +1,41 @@
 # ──────────────────────────────────────────────────────────────────
-# ClezJelly .gitignore
+# ClezJelly .gitignore — nothing personal ever gets committed
 # ──────────────────────────────────────────────────────────────────
 
-# Credentials & Secrets — NIEMALS committen!
+# Secrets and generated environment
 .env
-.env.local
-.env.local.bak
-.env.local.*.bak
-*.env
+.env.*
 !.env.example
+*.env
 
-# Service-Configs (enthalten API-Keys, Passwörter)
+# Component choices (generated per machine)
+.clezjelly.conf
+
+# Service configs (contain API keys, provider logins, databases)
 config/*
 !config/.gitkeep
 
-# Daten (Media, STRM-Files, Metadata)
+# Runtime data (.strm files, library, caches)
 data/
+
+# Installer log
+logs/
+
+# Databases and backups
 *.db
 *.sqlite
 *.sqlite3
+*.bak
+*.backup
+*.tar.gz
 
 # macOS
 .DS_Store
 .AppleDouble
 .LSOverride
 
-# Logs
-logs/
-*.log
-
-# Backups / Swap
-*.bak
-*.backup
-*.swp
-*~
-
-# Editor
+# Editors
 .vscode/
 .idea/
-*.sublime-*
+*.swp
+*~

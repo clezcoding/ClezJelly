@@ -2,7 +2,7 @@
   <ApiKey>${PROWLARR_API_KEY}</ApiKey>
   <BindAddress>*</BindAddress>
   <Port>9696</Port>
-  <SslPort>9898</SslPort>
+  <SslPort>6969</SslPort>
   <EnableSsl>False</EnableSsl>
   <LaunchBrowser>False</LaunchBrowser>
   <AuthenticationMethod>Forms</AuthenticationMethod>
@@ -11,8 +11,6 @@
   <LogLevel>info</LogLevel>
   <UpdateMechanism>Docker</UpdateMechanism>
   <Branch>master</Branch>
-  <SslCertPath></SslCertPath>
-  <SslCertPassword></SslCertPassword>
   <UrlBase></UrlBase>
   <InstanceName>Prowlarr</InstanceName>
 </Config>

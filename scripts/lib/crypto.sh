@@ -1,20 +1,10 @@
 #!/usr/bin/env bash
 # ──────────────────────────────────────────────────────────────────
-# ClezJelly — Credentials Encryption
-# Verschlüsselt Secrets in .env.local mit openssl aes-256-cbc + PBKDF2
-# ──────────────────────────────────────────────────────────────────
+# ClezJelly — credential encryption
+# AES-256-CBC with PBKDF2 (200k iterations) via the system openssl.
 #
-# Format der Datei:
-#   .env.local       → verschlüsselt (binary, mit "Salted__" Header)
-#   .env.local.plain → nur temporär im Memory beim Entschlüsseln
-#
-# Verwendung:
-#   source scripts/lib/crypto.sh
-#   crypto_encrypt_file .env.local.plain .env.local <passphrase>
-#   crypto_decrypt_file .env.local        <passphrase>  → gibt Content auf stdout
-#   crypto_prompt_passphrase               → fragt Passphrase, bestätigt
-#   crypto_prompt_unlock                   → fragt zum Entschlüsseln
-#
+#   .env.local   encrypted, safe to back up, useless without the passphrase
+#   plaintext    only ever lives in a temp file or in memory while in use
 # ──────────────────────────────────────────────────────────────────
 
 [[ -n "${CLEZJELLY_CRYPTO_LOADED:-}" ]] && return 0
@@ -23,87 +13,68 @@ CLEZJELLY_CRYPTO_LOADED=1
 [[ -z "${CLEZJELLY_COMMON_LOADED:-}" ]] && source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
 CRYPTO_CIPHER="aes-256-cbc"
-CRYPTO_KDF_OPTS="-pbkdf2 -iter 200000"
+CRYPTO_ITER=200000
 
-crypto_check_openssl() {
-  if ! command -v openssl &>/dev/null; then
-    log_err "openssl ist nicht installiert"
-    return 1
-  fi
-  return 0
-}
-
-# Verschlüsselt eine Plaintext-Datei → Ciphertext-Datei
+# crypto_encrypt_file <plain> <cipher> <passphrase>
 crypto_encrypt_file() {
-  local plain="$1"
-  local cipher="$2"
-  local pass="$3"
-  openssl enc -$CRYPTO_CIPHER $CRYPTO_KDF_OPTS -salt \
-    -in "$plain" -out "$cipher" -pass "pass:$pass"
+  local plain="$1" cipher="$2" pass="$3"
+  CLEZ_PASS="$pass" openssl enc -"$CRYPTO_CIPHER" -pbkdf2 -iter "$CRYPTO_ITER" -salt \
+    -in "$plain" -out "$cipher" -pass env:CLEZ_PASS
 }
 
-# Entschlüsselt eine Ciphertext-Datei → stdout
+# crypto_decrypt_file <cipher> <passphrase>  → plaintext on stdout
 crypto_decrypt_file() {
-  local cipher="$1"
-  local pass="$2"
-  openssl enc -$CRYPTO_CIPHER $CRYPTO_KDF_OPTS -d \
-    -in "$cipher" -pass "pass:$pass" 2>/dev/null
+  local cipher="$1" pass="$2"
+  CLEZ_PASS="$pass" openssl enc -"$CRYPTO_CIPHER" -pbkdf2 -iter "$CRYPTO_ITER" -d \
+    -in "$cipher" -pass env:CLEZ_PASS 2>/dev/null
 }
 
-# Prüft ob die Passphrase die Datei entschlüsseln kann
 crypto_verify_passphrase() {
-  local cipher="$1"
-  local pass="$2"
-  crypto_decrypt_file "$cipher" "$pass" >/dev/null 2>&1
+  crypto_decrypt_file "$1" "$2" >/dev/null 2>&1
 }
 
-# Fragt Passphrase + Bestätigung (für Erst-Erstellung)
+# New passphrase with confirmation (min. 8 chars)
 crypto_prompt_new_passphrase() {
   local p1 p2
   while true; do
-    p1="$(prompt_secret 'Passphrase für Credentials-Verschlüsselung')"
-    if [[ ${#p1} -lt 8 ]]; then
-      log_warn "Passphrase sollte min. 8 Zeichen haben" >&2
+    p1="$(prompt_secret 'Choose a passphrase')"
+    if [ "${#p1}" -lt 8 ]; then
+      log_warn "Use at least 8 characters." >&2
       continue
     fi
-    p2="$(prompt_secret 'Passphrase wiederholen')"
+    p2="$(prompt_secret 'Repeat it')"
     if [[ "$p1" == "$p2" ]]; then
-      echo "$p1"
+      printf '%s\n' "$p1"
       return 0
     fi
-    log_warn "Passphrasen stimmen nicht überein" >&2
+    log_warn "Those didn't match, try again." >&2
   done
 }
 
-# Fragt Passphrase zum Entschlüsseln (mit Retry)
+# Ask for the passphrase to unlock an existing file (3 tries)
 crypto_prompt_unlock() {
-  local cipher="$1"
-  local pass tries=0
-  while (( tries < 3 )); do
-    pass="$(prompt_secret 'Passphrase zum Entschlüsseln')"
+  local cipher="$1" pass tries=0
+  while [ "$tries" -lt 3 ]; do
+    pass="$(prompt_secret 'Passphrase')"
     if crypto_verify_passphrase "$cipher" "$pass"; then
-      echo "$pass"
+      printf '%s\n' "$pass"
       return 0
     fi
-    log_warn "Falsche Passphrase" >&2
-    (( tries++ ))
+    log_warn "Wrong passphrase." >&2
+    tries=$((tries + 1))
   done
-  log_err "Zu viele Fehlversuche" >&2
+  log_err "Too many attempts." >&2
   return 1
 }
 
-# Lädt .env.local in current shell env (Export aller Variablen)
-# Returns 0 wenn erfolgreich, 1 wenn Datei fehlt, 2 wenn passphrase falsch
+# Decrypt and export every KEY=VALUE line into the current shell
 crypto_source_envfile() {
-  local cipher="$1"
-  local pass="$2"
-  [[ ! -f "$cipher" ]] && return 1
-  local plain
+  local cipher="$1" pass="$2" plain line
+  [[ -f "$cipher" ]] || return 1
   plain="$(crypto_decrypt_file "$cipher" "$pass")" || return 2
-  # Export aller KEY=VAL Zeilen (ohne Kommentare)
   while IFS= read -r line; do
-    [[ -z "$line" || "$line" =~ ^# ]] && continue
-    export "$line"
+    [[ -z "$line" || "$line" == \#* ]] && continue
+    export "${line?}"
   done <<< "$plain"
   return 0
 }

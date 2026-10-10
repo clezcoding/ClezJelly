@@ -1,116 +1,100 @@
 #!/usr/bin/env bash
 # ──────────────────────────────────────────────────────────────────
-# Phase 6: TRaSH-Guide Custom Formats + Quality Profile anlegen
+# German formats — TRaSH-style custom formats + scores
 #
-# Nutzt den offiziellen TRaSH-Guide-Katalog für Radarr/Sonarr:
-#   https://trash-guides.info/
+# Creates three custom formats in Radarr and Sonarr and scores them in the
+# quality profile you picked, so German releases win automatically:
 #
-# Hinzugefügte Custom Formats (abhängig von PREFER_GERMAN):
-#   - German (DL)        → Score +500
-#   - German             → Score +400
-#   - English            → Score +100 (Fallback)
-#   - x265 (HD)          → Score -1000 (block, unerwünscht bei 1080p)
-# Quality Profile:
-#   - 1080p-webdl: nur WEBDL-1080p + WEBRip-1080p + HDTV-1080p
+#     German DL     +500   dual-language (German + original audio)
+#     German Only   +400   German audio only
+#     English       +100   fallback when no German release exists
+#
+# Specs are cloned from each app's /customformat/schema endpoint, so the
+# payload shape always matches the installed version.
 # ──────────────────────────────────────────────────────────────────
 
 [[ -z "${CLEZJELLY_COMMON_LOADED:-}" ]] && source "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh"
 [[ -z "${CLEZJELLY_API_LOADED:-}" ]]    && source "$(dirname "${BASH_SOURCE[0]}")/../lib/api.sh"
 
-RADARR_URL="http://localhost:7878"
-SONARR_URL="http://localhost:8989"
+RE_GERMAN_DL='(?<![a-z0-9])(german|ger)[ ._-]*(dl|dual)(?![a-z0-9])'
+RE_GERMAN='(?<![a-z0-9])(german|ger)(?![a-z0-9])'
 
-# ─── Radarr Custom Formats ─────────────────────────────────────────
-# JSON-Specs der Formate (minimal, TRaSH-kompatibel)
-
-radarr_add_cf_german_dl() {
-  local payload='{
-    "name":"German DL",
-    "includeCustomFormatWhenRenaming":false,
-    "specifications":[
-      {"name":"German DL","implementation":"ReleaseTitleSpecification","negate":false,"required":true,"fields":[{"name":"value","value":"(German|GERMAN).DL"}]}
-    ]
-  }'
-  arr_api_call POST "$RADARR_URL/api/v3/customformat" "$RADARR_API_KEY" "$payload"
+# _spec <schema_json> <implementation> <spec_name> <negate> <required> <value_json>
+_spec() {
+  jq -c --arg impl "$2" --arg name "$3" --argjson neg "$4" --argjson req "$5" --argjson val "$6" '
+      [.[] | select(.implementation == $impl)] | first
+      | .name = $name | .negate = $neg | .required = $req
+      | .fields |= map(if .name == "value" then .value = $val else . end)' <<<"$1"
 }
 
-radarr_add_cf_german_only() {
-  local payload='{
-    "name":"German Only",
-    "includeCustomFormatWhenRenaming":false,
-    "specifications":[
-      {"name":"German","implementation":"ReleaseTitleSpecification","negate":false,"required":true,"fields":[{"name":"value","value":"(?<![a-z0-9])(ger|german)(?![a-z0-9])"}]},
-      {"name":"Not German DL","implementation":"ReleaseTitleSpecification","negate":true,"required":true,"fields":[{"name":"value","value":"(German|GERMAN).DL"}]}
-    ]
-  }'
-  arr_api_call POST "$RADARR_URL/api/v3/customformat" "$RADARR_API_KEY" "$payload"
+# _ensure_cf <base_url> <api_key> <name> <specs_json_array>
+_ensure_cf() {
+  local base="$1" key="$2" name="$3" specs="$4" existing payload
+  existing="$(arr_request GET "$base/api/v3/customformat" "$key")" || return 1
+  json_has_name "$existing" "$name" && return $API_EXISTS
+  payload="$(jq -nc --arg name "$name" --argjson specs "$specs" \
+      '{name: $name, includeCustomFormatWhenRenaming: false, specifications: $specs}')" || return 1
+  arr_request POST "$base/api/v3/customformat" "$key" "$payload" >/dev/null || return 1
 }
 
-radarr_add_cf_english() {
-  local payload='{
-    "name":"English",
-    "includeCustomFormatWhenRenaming":false,
-    "specifications":[
-      {"name":"Language English","implementation":"LanguageSpecification","negate":false,"required":true,"fields":[{"name":"value","value":1}]}
-    ]
-  }'
-  arr_api_call POST "$RADARR_URL/api/v3/customformat" "$RADARR_API_KEY" "$payload"
+# _score_profile <base_url> <api_key> <profile_name>
+_score_profile() {
+  local base="$1" key="$2" wanted="$3" profiles cfs profile id payload
+  profiles="$(arr_request GET "$base/api/v3/qualityprofile" "$key")" || return 1
+  cfs="$(arr_request GET "$base/api/v3/customformat" "$key")" || return 1
+
+  profile="$(jq -c --arg n "$wanted" '(first(.[] | select(.name == $n))) // .[0]' <<<"$profiles")"
+  [[ -n "$profile" && "$profile" != "null" ]] || return 1
+  id="$(jq -r '.id' <<<"$profile")"
+
+  payload="$(jq -c --argjson cfs "$cfs" '
+      .formatItems as $old
+      | .formatItems = [ $cfs[] | . as $cf | {
+          format: $cf.id,
+          name:   $cf.name,
+          score: (
+            if   $cf.name == "German DL"   then 500
+            elif $cf.name == "German Only" then 400
+            elif $cf.name == "English"     then 100
+            else (first($old[]? | select(.format == $cf.id) | .score) // 0) end)
+        } ]' <<<"$profile")" || return 1
+
+  arr_request PUT "$base/api/v3/qualityprofile/$id" "$key" "$payload" >/dev/null || return 1
 }
 
-sonarr_add_cf_german_dl() {
-  local payload='{
-    "name":"German DL",
-    "includeCustomFormatWhenRenaming":false,
-    "specifications":[
-      {"name":"German DL","implementation":"ReleaseTitleSpecification","negate":false,"required":true,"fields":[{"name":"value","value":"(German|GERMAN).DL"}]}
-    ]
-  }'
-  arr_api_call POST "$SONARR_URL/api/v3/customformat" "$SONARR_API_KEY" "$payload"
-}
+# german_formats_apply — run for Radarr and Sonarr
+german_formats_apply() {
+  log_step "German formats"
+  local app base key schema rc profile_name specs
 
-sonarr_add_cf_german_only() {
-  local payload='{
-    "name":"German Only",
-    "includeCustomFormatWhenRenaming":false,
-    "specifications":[
-      {"name":"German","implementation":"ReleaseTitleSpecification","negate":false,"required":true,"fields":[{"name":"value","value":"(?<![a-z0-9])(ger|german)(?![a-z0-9])"}]},
-      {"name":"Not German DL","implementation":"ReleaseTitleSpecification","negate":true,"required":true,"fields":[{"name":"value","value":"(German|GERMAN).DL"}]}
-    ]
-  }'
-  arr_api_call POST "$SONARR_URL/api/v3/customformat" "$SONARR_API_KEY" "$payload"
-}
+  case "${QUALITY_PROFILE:-1080p-webdl}" in
+    2160p-webdl) profile_name="Ultra-HD" ;;
+    720p-webdl)  profile_name="HD-720p" ;;
+    *)           profile_name="HD-1080p" ;;
+  esac
 
-sonarr_add_cf_english() {
-  local payload='{
-    "name":"English",
-    "includeCustomFormatWhenRenaming":false,
-    "specifications":[
-      {"name":"Language English","implementation":"LanguageSpecification","negate":false,"required":true,"fields":[{"name":"value","value":1}]}
-    ]
-  }'
-  arr_api_call POST "$SONARR_URL/api/v3/customformat" "$SONARR_API_KEY" "$payload"
-}
+  for app in Radarr Sonarr; do
+    if [[ "$app" == "Radarr" ]]; then base="$RADARR_URL"; key="$RADARR_API_KEY"; else base="$SONARR_URL"; key="$SONARR_API_KEY"; fi
 
-trash_profiles_apply() {
-  log_header "Phase 6 · TRaSH-Guide Profile"
+    schema="$(arr_request GET "$base/api/v3/customformat/schema" "$key")" || { log_warn "$app: couldn't read the format schema"; continue; }
 
-  if [[ "$PREFER_GERMAN" != "true" ]]; then
-    log_info "PREFER_GERMAN=false — Phase übersprungen"
-    return 0
-  fi
+    specs="[$(_spec "$schema" ReleaseTitleSpecification "German DL" false true "$(jq -Rn --arg v "$RE_GERMAN_DL" '$v')")]"
+    rc=0; _ensure_cf "$base" "$key" "German DL" "$specs" || rc=$?
+    _report "$app · German DL" "$rc"
 
-  log_step "Radarr: Custom Formats (DE)"
-  radarr_add_cf_german_dl    >/dev/null 2>&1 && log_ok "German DL +500" || log_warn "German DL schon vorhanden"
-  radarr_add_cf_german_only  >/dev/null 2>&1 && log_ok "German Only +400" || log_warn "German Only schon vorhanden"
-  radarr_add_cf_english      >/dev/null 2>&1 && log_ok "English +100" || log_warn "English schon vorhanden"
+    specs="[$(_spec "$schema" ReleaseTitleSpecification "German" false true "$(jq -Rn --arg v "$RE_GERMAN" '$v')"),$(_spec "$schema" ReleaseTitleSpecification "Not DL" true true "$(jq -Rn --arg v "$RE_GERMAN_DL" '$v')")]"
+    rc=0; _ensure_cf "$base" "$key" "German Only" "$specs" || rc=$?
+    _report "$app · German Only" "$rc"
 
-  log_step "Sonarr: Custom Formats (DE)"
-  sonarr_add_cf_german_dl    >/dev/null 2>&1 && log_ok "German DL +500" || log_warn "German DL schon vorhanden"
-  sonarr_add_cf_german_only  >/dev/null 2>&1 && log_ok "German Only +400" || log_warn "German Only schon vorhanden"
-  sonarr_add_cf_english      >/dev/null 2>&1 && log_ok "English +100" || log_warn "English schon vorhanden"
+    specs="[$(_spec "$schema" LanguageSpecification "English" false true 1)]"
+    rc=0; _ensure_cf "$base" "$key" "English" "$specs" || rc=$?
+    _report "$app · English" "$rc"
 
-  log_info "Scores manuell im Quality Profile zuweisen:"
-  log_info "  Radarr: Settings → Profiles → HD-1080p → Custom Formats"
-  log_info "    German DL = +500, German Only = +400, English = +100"
-  log_info "  Analog in Sonarr"
+    rc=0; _score_profile "$base" "$key" "$profile_name" || rc=$?
+    if [ "$rc" -eq 0 ]; then
+      log_ok "$app · scores set on \"$profile_name\"  (DL +500 · German +400 · English +100)"
+    else
+      log_warn "$app · couldn't set scores — assign them in Settings → Profiles (details in $UI_LOG)"
+    fi
+  done
 }

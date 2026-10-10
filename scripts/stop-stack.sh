@@ -1,10 +1,4 @@
 #!/usr/bin/env bash
-set -euo pipefail
-cd "$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
-
-echo "➜ Stoppe ClezJelly Stack…"
-docker compose down
-
-echo "✓ Stack gestoppt."
-echo ""
-echo "ℹ Jellyfin.app läuft weiter — bei Bedarf manuell schließen (Cmd+Q)."
+# Stop the stack. Same as: ./install.sh down
+cd "$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )" || exit 1
+exec ./install.sh down

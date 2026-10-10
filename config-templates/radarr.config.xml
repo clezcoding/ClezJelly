@@ -11,8 +11,6 @@
   <LogLevel>info</LogLevel>
   <UpdateMechanism>Docker</UpdateMechanism>
   <Branch>master</Branch>
-  <SslCertPath></SslCertPath>
-  <SslCertPassword></SslCertPassword>
   <UrlBase></UrlBase>
   <InstanceName>Radarr</InstanceName>
 </Config>

@@ -1,114 +1,92 @@
 #!/usr/bin/env bash
 # ╔══════════════════════════════════════════════════════════════════╗
-# ║   ClezJelly — Quick Install                                      ║
-# ║   Klont das Repo nach ~/Desktop/ClezJelly und startet install.sh ║
+# ║  ClezJelly — quick install                                       ║
 # ║                                                                  ║
-# ║   Aufruf:                                                        ║
-# ║     bash <(curl -fsSL https://raw.githubusercontent.com/\       ║
-# ║       clezcoding/ClezJelly/main/scripts/quickstart.sh)           ║
+# ║  Clones the repo to ~/Desktop/ClezJelly and starts the installer ║
 # ║                                                                  ║
-# ║   Optional (Env-Vars):                                           ║
-# ║     CLEZJELLY_TARGET_DIR   → anderer Zielordner                  ║
-# ║     CLEZJELLY_BRANCH       → anderer Branch (default: main)      ║
+# ║    bash <(curl -fsSL https://raw.githubusercontent.com/\         ║
+# ║          clezcoding/ClezJelly/main/scripts/quickstart.sh)        ║
+# ║                                                                  ║
+# ║  Optional environment variables:                                 ║
+# ║    CLEZJELLY_TARGET_DIR   another folder (default: Desktop)      ║
+# ║    CLEZJELLY_BRANCH       another branch (default: main)         ║
 # ╚══════════════════════════════════════════════════════════════════╝
 
-# Hinweis: Kein `set -u` — Env-Variablen wie CLEZJELLY_TARGET_DIR können
-# ungesetzt sein, und das soll kein Fehler sein (nutzt dann den Default).
+# No `set -u`: the optional variables above may be unset.
 set -eo pipefail
 
-# ── Farben ────────────────────────────────────────────────────────
-RESET=$'\033[0m'
-BOLD=$'\033[1m'
-DIM=$'\033[2m'
-RED=$'\033[0;31m'
-GREEN=$'\033[0;32m'
-YELLOW=$'\033[0;33m'
-CYAN=$'\033[0;36m'
-MAGENTA=$'\033[0;35m'
+if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
+  RESET=$'\033[0m'; BOLD=$'\033[1m'
+  VIOLET=$'\033[38;5;141m'; PINK=$'\033[38;5;212m'; OK=$'\033[38;5;78m'
+  WARN=$'\033[38;5;214m'; ERR=$'\033[38;5;203m'; MUTE=$'\033[38;5;245m'
+else
+  RESET=""; BOLD=""; VIOLET=""; PINK=""; OK=""; WARN=""; ERR=""; MUTE=""
+fi
 
-# ── Config ────────────────────────────────────────────────────────
-: "${HOME:?HOME ist nicht gesetzt — kann nicht fortfahren}"
+: "${HOME:?HOME is not set}"
 REPO_URL="https://github.com/clezcoding/ClezJelly.git"
 TARGET_DIR="${CLEZJELLY_TARGET_DIR:-$HOME/Desktop/ClezJelly}"
 BRANCH="${CLEZJELLY_BRANCH:-main}"
 
-# ── Logging ───────────────────────────────────────────────────────
-log()   { echo "${CYAN}➜${RESET} ${BOLD}$1${RESET}"; }
-ok()    { echo "  ${GREEN}✓${RESET} $1"; }
-err()   { echo "  ${RED}✗${RESET} ${RED}$1${RESET}" >&2; }
-warn()  { echo "  ${YELLOW}⚠${RESET} ${YELLOW}$1${RESET}"; }
-info()  { echo "  ${DIM}$1${RESET}"; }
+step() { printf '  %s◆%s %s%s%s\n' "$VIOLET" "$RESET" "$BOLD" "$1" "$RESET"; }
+ok()   { printf '    %s✓%s %s\n' "$OK" "$RESET" "$1"; }
+warn() { printf '    %s▲ %s%s\n' "$WARN" "$1" "$RESET"; }
+err()  { printf '    %s✗ %s%s\n' "$ERR" "$1" "$RESET" >&2; }
+note() { printf '    %s· %s%s\n' "$MUTE" "$1" "$RESET"; }
 
-# ── Banner ────────────────────────────────────────────────────────
-clear 2>/dev/null || true
-echo "${BOLD}${MAGENTA}"
-cat << 'EOF'
-    _____ _          _      _ _
-   / ____| |        | |    | | |
-  | |    | | ___ ___| | ___| | |_   _
-  | |    | |/ _ \_  / |/ _ \ | | | | |
-  | |____| |  __// /| |  __/ | | |_| |
-   \_____|_|\___/___|_|\___|_|_|\__, |
-                                 __/ |
-                                |___/
-EOF
-echo "${RESET}"
-echo "${DIM}  Quick Install — holt das Repo & startet den Installer${RESET}"
+echo ""
+printf '  %s▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪%s\n' "$MUTE" "$RESET"
+echo ""
+printf '  %s%sClez%s%s%sJelly%s   %squick install%s\n' "$BOLD" "$VIOLET" "$RESET" "$BOLD" "$PINK" "$RESET" "$MUTE" "$RESET"
 echo ""
 
-# ── Preflight ─────────────────────────────────────────────────────
-log "Preflight Checks"
-
-# macOS Check
+# ── Checks ────────────────────────────────────────────────────────
+step "Checking your Mac"
 if [[ "$(uname -s)" != "Darwin" ]]; then
-  err "Dieses Script läuft nur auf macOS. Du bist auf $(uname -s)."
+  err "ClezJelly targets macOS (you're on $(uname -s))."
   exit 1
 fi
-ok "macOS $(sw_vers -productVersion) auf $(uname -m)"
+ok "macOS $(sw_vers -productVersion) · $(uname -m)"
 
-# Homebrew
 if ! command -v brew &>/dev/null; then
-  err "Homebrew fehlt. Installiere es zuerst:"
-  info '/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'
+  err "Homebrew is missing. Install it first:"
+  note '/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'
   exit 1
 fi
-ok "Homebrew installiert"
+ok "Homebrew"
 
-# git
 if ! command -v git &>/dev/null; then
-  warn "git fehlt — installiere via brew…"
+  warn "git is missing — installing it with Homebrew"
   brew install git
 fi
-ok "git verfügbar"
+ok "git"
 
+# ── Get the code ──────────────────────────────────────────────────
 echo ""
-
-# ── Target directory prüfen ───────────────────────────────────────
-log "Zielordner: ${BOLD}$TARGET_DIR${RESET}"
-
-if [[ -e "$TARGET_DIR" ]]; then
-  if [[ -d "$TARGET_DIR/.git" ]]; then
-    warn "Repo existiert bereits — update mit git pull"
-    cd "$TARGET_DIR"
-    git pull --rebase
-    ok "Repo aktualisiert"
-  else
-    err "$TARGET_DIR existiert, ist aber kein Git-Repo."
-    info "Bitte Ordner löschen oder einen anderen Pfad wählen:"
-    info "  CLEZJELLY_TARGET_DIR=\$HOME/Desktop/ClezJelly2 bash <(curl…)"
+step "Getting ClezJelly → $TARGET_DIR"
+if [[ -d "$TARGET_DIR/.git" ]]; then
+  note "Already cloned — updating"
+  git -C "$TARGET_DIR" pull --ff-only || {
+    err "Couldn't fast-forward. You have local changes in $TARGET_DIR."
+    note "Commit or stash them, then run this again."
     exit 1
-  fi
+  }
+  ok "Up to date"
+elif [[ -e "$TARGET_DIR" ]]; then
+  err "$TARGET_DIR exists but isn't a ClezJelly clone."
+  note "Move it away, or pick another folder:"
+  note "CLEZJELLY_TARGET_DIR=\$HOME/Desktop/ClezJelly2 bash <(curl -fsSL …)"
+  exit 1
 else
-  log "Klone Repo nach $TARGET_DIR…"
   mkdir -p "$(dirname "$TARGET_DIR")"
-  git clone --branch "$BRANCH" "$REPO_URL" "$TARGET_DIR"
-  ok "Repo geklont"
+  git clone --quiet --branch "$BRANCH" "$REPO_URL" "$TARGET_DIR"
+  ok "Cloned"
 fi
 
 cd "$TARGET_DIR"
 chmod +x install.sh scripts/*.sh 2>/dev/null || true
 
 echo ""
-log "Starte Installer…"
+step "Starting the installer"
 echo ""
-exec ./install.sh
+exec ./install.sh install

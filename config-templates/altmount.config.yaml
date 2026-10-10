@@ -1,40 +1,106 @@
-# AltMount — Automatisch generiert von ClezJelly install.sh
-# NICHT HÄNDISCH BEARBEITEN — Änderungen beim nächsten Setup überschrieben
+# ──────────────────────────────────────────────────────────────────
+# AltMount — seeded by ClezJelly (config-templates/altmount.config.yaml)
+#
+# Streams Usenet content on demand and writes .strm files that Jellyfin
+# plays. Nothing is downloaded. Edits you make in the AltMount web UI are
+# kept; the installer only rewrites this file when you change credentials.
 # ──────────────────────────────────────────────────────────────────
 
-auth:
-  login_required: false
+webdav:
+  port: 8080
+  user: 'usenet'
+  password: 'usenet'
+  host: '${PUBLIC_HOST}'          # host written into .strm URLs
 
-providers:
-  - host: ${EWEKA_HOST}
-    port: ${EWEKA_PORT}
-    username: ${EWEKA_USER}
-    password: ${EWEKA_PASS}
-    max_connections: ${EWEKA_MAX_CONN}
-    tls: true
-    inflight_requests: 10
+api:
+  prefix: '/api'
+  key_override: '${ALTMOUNT_API_KEY}'   # also the key Radarr/Sonarr use for the SABnzbd API
+
+auth:
+  login_required: false           # reachable only on localhost unless "AltMount on LAN" is on
+
+database:
+  path: '/config/altmount.db'
+
+metadata:
+  root_path: '/config/metadata'
+
+streaming:
+  max_prefetch: 60
+  failure_masking:
     enabled: true
+    threshold: 3
+
+segment_cache:
+  memory_mb: 256
+  enabled: false
+
+import:
+  max_processor_workers: 2
+  import_strategy: 'STRM'         # write .strm files, no FUSE needed on macOS
+  import_dir: '/data/strm'        # staging area; Radarr/Sonarr move files into /data/library
+
+mount_path: 'http://${PUBLIC_HOST}:8080'
 
 sabnzbd:
   enabled: true
-  api_key: ${ALTMOUNT_SAB_API_KEY}
+  complete_dir: '/'
   categories:
-    - name: movies
+    - name: 'Default'
+      order: 0
+      priority: 0
+      dir: 'complete'
+    - name: 'movies'
+      order: 1
+      priority: 0
+      dir: 'movies'
       type: radarr
-    - name: tv
+    - name: 'tv'
+      order: 2
+      priority: 0
+      dir: 'tv'
       type: sonarr
 
 arrs:
   enabled: true
+  max_workers: 5
   queue_cleanup_enabled: true
   queue_cleanup_interval_seconds: 300
   queue_cleanup_grace_period_minutes: 5
-
-mount_path: http://host.docker.internal:8080
-import:
-  import_strategy: STRM
-  import_dir: /strm
+  radarr_instances:
+    - name: 'radarr'
+      url: 'http://radarr:7878'
+      api_key: '${RADARR_API_KEY}'
+      enabled: true
+  sonarr_instances:
+    - name: 'sonarr'
+      url: 'http://sonarr:8989'
+      api_key: '${SONARR_API_KEY}'
+      enabled: true
 
 health:
   enabled: true
-  check_interval_hours: 24
+  library_dir: '/data/library'
+  cleanup_orphaned_metadata: false
+
+log:
+  file: '/config/altmount.log'
+  level: 'info'
+  max_size: 50
+  max_age: 14
+  max_backups: 5
+  compress: true
+
+providers:
+  - id: 'provider_primary'
+    host: '${Y_EWEKA_HOST}'
+    port: ${EWEKA_PORT}
+    username: '${Y_EWEKA_USER}'
+    password: '${Y_EWEKA_PASS}'
+    max_connections: ${EWEKA_MAX_CONN}
+    min_connections_alive: 2
+    inflight_requests: 10
+    tls: ${EWEKA_TLS}
+    insecure_tls: false
+    enabled: true
+    is_backup_provider: false

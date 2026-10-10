@@ -1,18 +1,16 @@
 #!/usr/bin/env bash
 # ──────────────────────────────────────────────────────────────────
-# Phase 5: Services via API verknüpfen
+# Phase 5 · Wiring
 #
-# Prowlarr:
-#   - NZBGeek-Indexer hinzufügen
-#   - (optional) zweiter Indexer
-#   - Radarr + Sonarr als Apps
-#   - Sync Indexers
-# Radarr/Sonarr:
-#   - Root Folder
-#   - AltMount als Download Client (SABnzbd-API)
-#   - Jellyfin Connect
-# Bazarr: Konfig via config.ini — kein zusätzlicher API-Call nötig
-# Seerr: braucht Jellyfin-Login — manuell
+# Connects the services through their REST APIs. New objects are cloned from
+# the service's own /schema endpoint and only the relevant fields are filled
+# in, so the payloads keep matching as the apps evolve. Existing objects are
+# updated in place — running this twice never creates duplicates, and it
+# repairs links after a key or credential change.
+#
+#   Prowlarr ← NZBGeek (+ 2nd indexer)       Radarr ← AltMount (SABnzbd API)
+#   Prowlarr → Radarr, Sonarr (apps)         Sonarr ← AltMount (SABnzbd API)
+#   Radarr / Sonarr: root folders            AltMount → import webhooks
 # ──────────────────────────────────────────────────────────────────
 
 [[ -z "${CLEZJELLY_COMMON_LOADED:-}" ]] && source "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh"
@@ -23,151 +21,166 @@ RADARR_URL="http://localhost:7878"
 SONARR_URL="http://localhost:8989"
 ALTMOUNT_URL="http://localhost:8080"
 
-link_prowlarr_indexer() {
-  local name="$1"
-  local base_url="$2"
-  local api_key="$3"
-  local def_name="${4:-Newznab}"  # Prowlarr-Indexer-Definition
+API_UPDATED=11
 
-  local payload
-  payload=$(cat <<EOF
-{
-  "name": "$name",
-  "fields": [
-    {"name": "baseUrl", "value": "$base_url"},
-    {"name": "apiKey", "value": "$api_key"},
-    {"name": "categories", "value": [2000,5000,5030,5040,5045]}
-  ],
-  "configContract": "NewznabSettings",
-  "implementation": "Newznab",
-  "implementationName": "Newznab",
-  "protocol": "usenet",
-  "enable": true,
-  "priority": 25,
-  "appProfileId": 1
-}
-EOF
-  )
-  arr_api_call POST "$PROWLARR_URL/api/v1/indexer" "$PROWLARR_API_KEY" "$payload" | head -c 100
+# _report <label> <rc>
+_report() {
+  case "$2" in
+    0)  log_ok "$1" ;;
+    10) log_info "$1 — already there" ;;
+    11) log_ok "$1 — synced" ;;
+    *)  log_warn "$1 — failed (details in $UI_LOG)" ;;
+  esac
 }
 
-link_prowlarr_app() {
-  local name="$1"
-  local url="$2"
-  local api_key="$3"
-  local app_name="$4"  # Radarr / Sonarr
+# _upsert <collection_url> <schema_url> <api_key> <name> <implementation>
+# Caller sets JQ_ARGS (array of jq --arg/--argjson pairs) and JQ_FILTER first.
+#   exists  → PUT the transformed item      (returns 11)
+#   missing → clone from schema, then POST  (returns 0)
+_upsert() {
+  local coll="$1" schema_url="$2" key="$3" name="$4" impl="$5"
+  local existing id item schema payload
+  existing="$(arr_request GET "$coll" "$key")" || return 1
+  id="$(jq -r --arg n "$name" 'first(.[] | select(.name == $n) | .id) // empty' <<<"$existing")"
 
-  local payload
-  payload=$(cat <<EOF
-{
-  "name": "$name",
-  "syncLevel": "fullSync",
-  "fields": [
-    {"name": "prowlarrUrl", "value": "http://prowlarr:9696"},
-    {"name": "baseUrl", "value": "$url"},
-    {"name": "apiKey", "value": "$api_key"},
-    {"name": "syncCategories", "value": [2000,5000,5030,5040,5045]}
-  ],
-  "implementation": "$app_name",
-  "implementationName": "$app_name",
-  "configContract": "${app_name}Settings"
-}
-EOF
-  )
-  arr_api_call POST "$PROWLARR_URL/api/v1/applications" "$PROWLARR_API_KEY" "$payload" | head -c 100
-}
-
-link_arr_download_client() {
-  local arr_url="$1"
-  local arr_api_key="$2"
-  local category="$3"  # movies oder tv
-  local api_version="${4:-v3}"
-
-  local payload
-  payload=$(cat <<EOF
-{
-  "enable": true,
-  "protocol": "usenet",
-  "priority": 1,
-  "name": "AltMount",
-  "fields": [
-    {"name": "host", "value": "altmount"},
-    {"name": "port", "value": 8080},
-    {"name": "useSsl", "value": false},
-    {"name": "urlBase", "value": ""},
-    {"name": "apiKey", "value": "$ALTMOUNT_SAB_API_KEY"},
-    {"name": "movieCategory", "value": "$category"},
-    {"name": "tvCategory", "value": "$category"},
-    {"name": "recentTvPriority", "value": -100},
-    {"name": "olderTvPriority", "value": -100},
-    {"name": "recentMoviePriority", "value": -100},
-    {"name": "olderMoviePriority", "value": -100}
-  ],
-  "implementation": "Sabnzbd",
-  "implementationName": "SABnzbd",
-  "configContract": "SabnzbdSettings"
-}
-EOF
-  )
-  arr_api_call POST "$arr_url/api/$api_version/downloadclient" "$arr_api_key" "$payload" | head -c 100
-}
-
-link_arr_root_folder() {
-  local arr_url="$1"
-  local arr_api_key="$2"
-  local path="$3"
-  local api_version="${4:-v3}"
-
-  arr_api_call POST "$arr_url/api/$api_version/rootfolder" "$arr_api_key" \
-    "{\"path\": \"$path\"}" | head -c 100
-}
-
-services_link() {
-  log_header "Phase 5 · Services verknüpfen (API)"
-
-  # ── Prowlarr: Indexer hinzufügen ────────────────────────────────
-  log_step "Prowlarr: NZBGeek Indexer"
-  link_prowlarr_indexer "NZBGeek" "$NZBGEEK_URL" "$NZBGEEK_API_KEY" >/dev/null
-  log_ok "NZBGeek hinzugefügt"
-
-  if [[ -n "$INDEXER2_NAME" ]]; then
-    log_step "Prowlarr: $INDEXER2_NAME Indexer"
-    link_prowlarr_indexer "$INDEXER2_NAME" "$INDEXER2_URL" "$INDEXER2_API_KEY" >/dev/null
-    log_ok "$INDEXER2_NAME hinzugefügt"
+  if [[ -n "$id" ]]; then
+    item="$(jq -c --argjson id "$id" 'first(.[] | select(.id == $id))' <<<"$existing")" || return 1
+    payload="$(jq -c "${JQ_ARGS[@]}" "$JQ_FILTER" <<<"$item")" || return 1
+    arr_request PUT "$coll/$id?forceSave=true" "$key" "$payload" >/dev/null || return 1
+    return $API_UPDATED
   fi
 
-  # ── Prowlarr: Radarr + Sonarr als Apps ──────────────────────────
-  log_step "Prowlarr: Radarr verknüpfen"
-  link_prowlarr_app "Radarr" "http://radarr:7878" "$RADARR_API_KEY" "Radarr" >/dev/null
-  log_ok "Radarr unter Apps"
+  schema="$(arr_request GET "$schema_url" "$key")" || return 1
+  item="$(jq -c --arg impl "$impl" '[.[] | select(.implementation == $impl)] | first | del(.presets)' <<<"$schema")" || return 1
+  [[ -n "$item" && "$item" != "null" ]] || { echo "no schema for $impl at $schema_url" >>"$UI_LOG"; return 1; }
+  payload="$(jq -c "${JQ_ARGS[@]}" "$JQ_FILTER" <<<"$item")" || return 1
+  arr_request POST "$coll?forceSave=true" "$key" "$payload" >/dev/null || return 1
+}
 
-  log_step "Prowlarr: Sonarr verknüpfen"
-  link_prowlarr_app "Sonarr" "http://sonarr:8989" "$SONARR_API_KEY" "Sonarr" >/dev/null
-  log_ok "Sonarr unter Apps"
+# ── Prowlarr ──────────────────────────────────────────────────────
 
-  log_step "Prowlarr: Sync App Indexers"
-  arr_api_call POST "$PROWLARR_URL/api/v1/command" "$PROWLARR_API_KEY" \
-    '{"name":"ApplicationIndexerSync","forceSync":true}' >/dev/null
-  sleep 3
-  log_ok "Indexer synced"
+# link_indexer <name> <base_url> <api_key>
+link_indexer() {
+  local name="$1" url="$2" key="$3" profile
+  profile="$(arr_request GET "$PROWLARR_URL/api/v1/appprofile" "$PROWLARR_API_KEY" | jq -r '.[0].id // 1' 2>/dev/null || echo 1)"
+  JQ_ARGS=(--arg name "$name" --arg url "${url%/}" --arg key "$key" --argjson profile "${profile:-1}")
+  JQ_FILTER='
+    .name = $name | .enable = true | .priority = 25 | .appProfileId = $profile | .tags = []
+    | .fields |= map(
+        if   .name == "baseUrl" then .value = $url
+        elif .name == "apiPath" then .value = "/api"
+        elif .name == "apiKey"  then .value = $key
+        else . end)'
+  _upsert "$PROWLARR_URL/api/v1/indexer" "$PROWLARR_URL/api/v1/indexer/schema" "$PROWLARR_API_KEY" "$name" "Newznab"
+}
 
-  # ── Radarr: Root Folder + Download Client ──────────────────────
-  log_step "Radarr: Root Folder /movies"
-  link_arr_root_folder "$RADARR_URL" "$RADARR_API_KEY" "/movies" "v3" >/dev/null
-  log_ok "Root Folder gesetzt"
+# link_prowlarr_app <Radarr|Sonarr> <internal_base_url> <api_key>
+link_prowlarr_app() {
+  local impl="$1" base="$2" key="$3"
+  JQ_ARGS=(--arg name "$impl" --arg base "$base" --arg key "$key")
+  JQ_FILTER='
+    .name = $name | .syncLevel = "fullSync" | .tags = []
+    | .fields |= map(
+        if   .name == "prowlarrUrl" then .value = "http://prowlarr:9696"
+        elif .name == "baseUrl"     then .value = $base
+        elif .name == "apiKey"      then .value = $key
+        else . end)'
+  _upsert "$PROWLARR_URL/api/v1/applications" "$PROWLARR_URL/api/v1/applications/schema" "$PROWLARR_API_KEY" "$impl" "$impl"
+}
 
-  log_step "Radarr: AltMount als Download Client"
-  link_arr_download_client "$RADARR_URL" "$RADARR_API_KEY" "movies" "v3" >/dev/null
-  log_ok "AltMount verknüpft"
+# ── Radarr / Sonarr ───────────────────────────────────────────────
 
-  # ── Sonarr: Root Folder + Download Client ──────────────────────
-  log_step "Sonarr: Root Folder /tv"
-  link_arr_root_folder "$SONARR_URL" "$SONARR_API_KEY" "/tv" "v3" >/dev/null
-  log_ok "Root Folder gesetzt"
+# link_root_folder <base_url> <api_key> <path>
+link_root_folder() {
+  local base="$1" key="$2" path="$3" existing
+  existing="$(arr_request GET "$base/api/v3/rootfolder" "$key")" || return 1
+  if jq -e --arg p "$path" 'any(.[]; .path == $p or .path == ($p + "/"))' <<<"$existing" >/dev/null 2>&1; then
+    return $API_EXISTS
+  fi
+  arr_request POST "$base/api/v3/rootfolder" "$key" "$(jq -nc --arg p "$path" '{path: $p}')" >/dev/null || return 1
+}
 
-  log_step "Sonarr: AltMount als Download Client"
-  link_arr_download_client "$SONARR_URL" "$SONARR_API_KEY" "tv" "v3" >/dev/null
-  log_ok "AltMount verknüpft"
+# link_download_client <base_url> <api_key> <category_field> <category>
+# category_field: movieCategory (Radarr) or tvCategory (Sonarr)
+link_download_client() {
+  local base="$1" key="$2" catfield="$3" cat="$4"
+  JQ_ARGS=(--arg key "$ALTMOUNT_API_KEY" --arg catfield "$catfield" --arg cat "$cat")
+  JQ_FILTER='
+    .name = "AltMount" | .enable = true | .priority = 1 | .tags = []
+    | .fields |= map(
+        if   .name == "host"    then .value = "altmount"
+        elif .name == "port"    then .value = 8080
+        elif .name == "useSsl"  then .value = false
+        elif .name == "urlBase" then .value = ""
+        elif .name == "apiKey"  then .value = $key
+        elif .name == $catfield then .value = $cat
+        else . end)'
+  _upsert "$base/api/v3/downloadclient" "$base/api/v3/downloadclient/schema" "$key" "AltMount" "Sabnzbd"
+}
 
-  log_ok "Alle Service-Verknüpfungen angelegt"
+# ── AltMount ──────────────────────────────────────────────────────
+
+# Ask AltMount to register its import webhooks in Radarr/Sonarr
+altmount_register_webhooks() {
+  local code
+  code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 -X POST "$ALTMOUNT_URL/api/arrs/webhook/register" 2>>"$UI_LOG" || echo 000)"
+  [[ "$code" =~ ^2 ]] || { printf 'webhook register → HTTP %s\n' "$code" >>"$UI_LOG"; return 1; }
+}
+
+# ── Orchestration ─────────────────────────────────────────────────
+
+services_link() {
+  ui_phase 5 5 "Wiring"
+  local rc
+  cd "$CLEZJELLY_ROOT" || return 1
+
+  if ! command -v jq &>/dev/null; then
+    log_err "jq is required for this step (brew install jq)."
+    return 1
+  fi
+
+  # ── Prowlarr ──
+  log_step "Prowlarr · indexers"
+  rc=0; link_indexer "NZBGeek" "$NZBGEEK_URL" "$NZBGEEK_API_KEY" || rc=$?
+  _report "NZBGeek" "$rc"
+  if [[ -n "${INDEXER2_NAME:-}" ]]; then
+    rc=0; link_indexer "$INDEXER2_NAME" "$INDEXER2_URL" "$INDEXER2_API_KEY" || rc=$?
+    _report "$INDEXER2_NAME" "$rc"
+  fi
+
+  log_step "Prowlarr · apps"
+  rc=0; link_prowlarr_app "Radarr" "http://radarr:7878" "$RADARR_API_KEY" || rc=$?
+  _report "Radarr  → http://radarr:7878" "$rc"
+  rc=0; link_prowlarr_app "Sonarr" "http://sonarr:8989" "$SONARR_API_KEY" || rc=$?
+  _report "Sonarr  → http://sonarr:8989" "$rc"
+  if arr_request POST "$PROWLARR_URL/api/v1/command" "$PROWLARR_API_KEY" \
+       '{"name":"ApplicationIndexerSync"}' >/dev/null; then
+    log_ok "Indexers pushed to Radarr and Sonarr"
+  fi
+
+  # ── Radarr ──
+  log_step "Radarr"
+  rc=0; link_root_folder "$RADARR_URL" "$RADARR_API_KEY" "/data/library/movies" || rc=$?
+  _report "Root folder /data/library/movies" "$rc"
+  rc=0; link_download_client "$RADARR_URL" "$RADARR_API_KEY" "movieCategory" "movies" || rc=$?
+  _report "Download client AltMount (altmount:8080 · movies)" "$rc"
+
+  # ── Sonarr ──
+  log_step "Sonarr"
+  rc=0; link_root_folder "$SONARR_URL" "$SONARR_API_KEY" "/data/library/tv" || rc=$?
+  _report "Root folder /data/library/tv" "$rc"
+  rc=0; link_download_client "$SONARR_URL" "$SONARR_API_KEY" "tvCategory" "tv" || rc=$?
+  _report "Download client AltMount (altmount:8080 · tv)" "$rc"
+
+  # ── AltMount ──
+  log_step "AltMount"
+  if altmount_register_webhooks; then
+    log_ok "Import webhooks registered in Radarr and Sonarr"
+  else
+    log_warn "Couldn't register webhooks — in AltMount: Settings → ARRs → Register Webhooks"
+  fi
+
+  # ── Optional parts ──
+  if [[ "$ENABLE_GERMAN" == "true" ]]; then german_formats_apply; fi
+  if [[ "$ENABLE_SEERR" == "true" ]];  then seerr_prewire; fi
 }

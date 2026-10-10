@@ -1,78 +1,95 @@
-# 📺 05 — Samsung Tizen TV einrichten
+# 05 · Samsung TV
 
-## Jellyfin-App installieren (falls nicht vorhanden)
+[← 04 · German content](04-german-content.md) · [README](../README.md) · Next: [06 · Troubleshooting](06-troubleshooting.md)
 
-1. TV einschalten
-2. Smart Hub → Apps → Suche nach **Jellyfin**
-3. Installieren
-4. Öffnen
+Getting Jellyfin onto a Samsung Tizen TV. Other TV apps work the same way: install the Jellyfin app, enter the server address.
 
-## MacBook-IP finden
+## 1. Install the app
 
-Am MacBook im Terminal:
+1. Smart Hub → **Apps** → search **Jellyfin**
+2. Install and open it
+
+If it isn't listed for your model, see [Alternatives](#alternatives).
+
+## 2. Find the Mac's address
+
 ```bash
-ipconfig getifaddr en0
-# oder bei WLAN:
-ipconfig getifaddr en1
+ipconfig getifaddr en0     # Ethernet or Wi-Fi on most Macs
+ipconfig getifaddr en1     # try this if en0 prints nothing
 ```
 
-Ergebnis z.B. `192.168.1.42`. Notieren.
+You'll get something like `192.168.1.42`. The installer's finish screen shows it too.
 
-**Besser:** Eine DHCP-Reservation im Router einrichten, damit die IP sich nie ändert.
+> Reserve this address for the Mac in your router (DHCP reservation). Otherwise it may change and your TV loses the server.
 
-## Server im TV hinzufügen
+## 3. Connect
 
-Jellyfin-App auf dem TV:
-- **Server-URL manuell eingeben**
-- Adresse: `http://192.168.1.42:8096` (deine MacBook-IP)
-- Verbinden
-- Mit deinem Jellyfin-User einloggen
+In the TV app, add the server manually:
 
-## Playback-Settings für dein Internet
+```
+http://192.168.1.42:8096
+```
 
-Jellyfin-App auf dem TV → User → Einstellungen → Wiedergabe:
-- **Max. Streaming-Bitrate:** `25 Mbit/s` (passt zu deinen 40 Mbit/s mit Reserve)
-- **Max. Chromecast-Bitrate:** gleich
-- **Automatische Qualität:** ✓
+Sign in with the Jellyfin user you created. Done.
 
-## Direct Play prüfen
+## 4. Playback settings
 
-Beim ersten Playback oben rechts das kleine „i" oder bei einer Episode die Transcoding-Info öffnen:
-- **Play Method: Direct Play** ✓ (perfekt — kein Transcoding nötig)
-- **Play Method: Direct Stream** (ok — nur Container-Umverpackung)
-- **Play Method: Transcode** (❌ beim MacBook sollte VideoToolbox das aber flott machen)
+For a 40 Mbit/s line:
 
-## Remote-Zugriff mit Tailscale (optional)
+- **Maximum streaming bitrate:** 25 Mbit/s. That leaves room for everything else at home.
+- **Auto quality:** on.
 
-Damit du von unterwegs auch Jellyfin erreichst:
+Streams run on demand from Usenet, so a stable line matters more than a high bitrate. If you see buffering, drop to 15 Mbit/s.
+
+## 5. Check Direct Play
+
+While a video plays, open the playback info (the "i" or *Playback info* menu):
+
+| Play method | Meaning |
+|---|---|
+| **Direct Play** | Best. The TV plays the file as is. |
+| **Direct Stream** | Fine. Only the container is repackaged. |
+| **Transcode** | Works, but uses the Mac. Make sure *Apple VideoToolbox* is enabled in Jellyfin's playback settings. |
+
+Capping quality at 1080p in Radarr/Sonarr keeps most titles at Direct Play on modern TVs.
+
+## Remote access with Tailscale
+
+Want to watch away from home without opening any port on your router? [Tailscale](https://tailscale.com/) builds a private encrypted network between your devices. The free plan is enough.
 
 ```bash
 brew install --cask tailscale
 ```
 
-- Tailscale starten, Account anlegen (Free)
-- Auf dem Handy ebenfalls Tailscale-App installieren
-- Auf dem Handy Jellyfin-App → `http://<tailscale-ip-vom-mac>:8096`
+1. Start Tailscale on the Mac and sign in.
+2. Install Tailscale on your phone, sign in with the same account.
+3. In the phone's Jellyfin app, use the Mac's Tailscale address: `http://<mac-tailscale-ip>:8096`.
 
-Kein Portforwarding am Router nötig, keine öffentliche Domain, verschlüsselt.
+No public domain, no port forwarding, nothing exposed. Don't put Jellyfin or any of the other services on the open internet.
 
 ## Troubleshooting
 
-### TV findet den Server nicht
-- Beide im gleichen Netz?
-- Ping vom Mac zum TV testen: `ping <TV-IP>`
-- Firewall auf dem Mac deaktiviert (System → Netzwerk → Firewall)
+**The TV can't find the server**
 
-### Buffering
-- Max-Bitrate im TV runtersetzen auf 15 Mbit/s
-- Qualitätsprofile in Radarr/Sonarr auf WEB-DL 1080p begrenzen
-- Prüfen ob andere Downloads im Haushalt laufen
+- Same network? Many routers have a separate guest Wi-Fi that isolates devices.
+- Try the address in a phone's browser on the same Wi-Fi: `http://<mac-ip>:8096`.
+- macOS firewall: *System Settings → Network → Firewall*. Allow incoming connections for Jellyfin, or turn it off to test.
+- The Mac may have gone to sleep. *System Settings → Battery/Energy* → prevent automatic sleep when the display is off.
 
-### App stürzt ab
-- Jellyfin-App am TV löschen und neu installieren
-- Firmware-Update am TV
-- Alternative: **Jellyfin Media Player** installieren (etwas älterer Tizen-Build, aber stabiler)
+**The app crashes or freezes**
 
-### 4K-Content ruckelt
-- 4K via Internet-Stream geht bei 40 Mbit/s nicht sauber
-- In Radarr/Sonarr Quality-Profiles auf max. 1080p einschränken
+- Delete and reinstall the app, then update the TV's firmware.
+- Try the other client from [Alternatives](#alternatives).
+
+**4K stutters**
+
+Streaming 4K over a 40 Mbit/s line won't work smoothly. Limit your Radarr/Sonarr profiles to 1080p ([03](03-configuration.md)).
+
+**A video won't play but others do**
+
+Check [06 · Troubleshooting → STRM files](06-troubleshooting.md#jellyfin).
+
+## Alternatives
+
+- **Jellyfin on Samsung via Tizen sideload.** Newer builds sometimes land on GitHub before the store. Needs developer mode on the TV.
+- **A streaming stick or box** (Apple TV, Fire TV, Android TV, Nvidia Shield). The Jellyfin apps there are generally more polished than on Tizen and support more codecs for Direct Play.

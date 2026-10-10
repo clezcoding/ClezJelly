@@ -1,103 +1,85 @@
-# 📋 01 — Voraussetzungen
+# 01 · Prerequisites
 
-Bevor du mit der Installation beginnst, brauchst du folgendes.
+[← README](../README.md) · Next: [02 · Installation](02-installation.md)
 
-## Hardware
+Everything you need *before* running the installer. It takes about 15 minutes, most of it waiting for sign-up emails.
 
-| Was | Spezifikation |
+## Hardware and network
+
+| What | Needed |
 |---|---|
-| **MacBook M3 Pro** | Dein zweites, nicht genutztes Gerät |
-| **macOS** | Sonoma oder neuer |
-| **Freier Speicher** | ~10 GB für Docker-Images, Config, Metadata |
-| **RAM** | 8 GB reichen, 16 GB empfohlen |
-| **Internet** | Mindestens 40 Mbit/s Downstream (hast du) |
-| **Samsung Tizen TV** | Mit installierter Jellyfin-App |
+| **Mac** | Apple Silicon recommended (M1 or newer), macOS Sonoma or newer |
+| **Free disk space** | About 10 GB for container images and configs. Media itself is streamed, not stored. |
+| **RAM** | 8 GB works, 16 GB is comfortable |
+| **Internet** | 40 Mbit/s or more for 1080p streams |
+| **TV or player** | Anything that runs a Jellyfin app (Samsung Tizen, LG, Android TV, Apple TV, …) |
 
-## Netzwerk-Setup
+Put the Mac and the TV on the **same network**, and give the Mac a **fixed IP** (DHCP reservation in your router). You never need to open ports to the internet.
 
-- MacBook und Samsung TV im **gleichen WLAN/LAN**
-- Router sollte dem MacBook eine **feste IP** zuweisen (DHCP-Reservation)
-- Keine Port-Freigaben nach außen nötig
+## Software
 
-## Software (wird vom Install-Script geprüft)
+The installer checks all of this and tells you what's missing.
 
-| Software | Prüf-Befehl | Installation |
+| Software | Check | Install |
 |---|---|---|
-| **Homebrew** | `brew --version` | `/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"` |
-| **Docker Desktop** | `docker --version` | `brew install --cask docker` |
-| **Jellyfin** (nativ) | `ls /Applications/Jellyfin.app` | `brew install --cask jellyfin` |
+| **Homebrew** | `brew --version` | [brew.sh](https://brew.sh) |
+| **OrbStack** or **Docker Desktop** | `docker --version` | `brew install --cask orbstack` (lighter, recommended) or `brew install --cask docker` |
+| **Jellyfin** (native app) | `ls /Applications/Jellyfin.app` | `brew install --cask jellyfin` |
+| `openssl`, `curl`, `jq` | `jq --version` | `brew install jq` (the others ship with macOS) |
 
-Das `install.sh` kümmert sich darum. Du musst nur Homebrew selbst installieren, falls noch nicht vorhanden.
+Why is Jellyfin *not* in Docker? On macOS a native Jellyfin can use Apple's VideoToolbox for hardware transcoding. In a container it can't.
 
-## Online-Accounts (müssen VOR dem Setup existieren)
+## Accounts
 
-### 1. Eweka — Usenet Provider (Pflicht)
+You need two things: a **Usenet provider** (the pipe) and at least one **indexer** (the search engine).
 
-- **URL:** https://www.eweka.nl/
-- **Tarif:** Classic (unlimited, ~€9/Monat) — oder jährlich für günstiger
-- **Warum Eweka:** NL-Backbone = EU-schnell, super Retention (5000+ Tage), kein Logging
-- **Alternative:** [Newshosting](https://www.newshosting.com/) (US-Backbone, Tochter von Highwinds) oder [Frugalusenet](https://frugalusenet.com/) (bundelt mehrere Backbones)
+### 1. Usenet provider (required)
 
-Nach dem Signup brauchst du:
-- Server-Hostname: `ssl-eu.eweka.nl` (siehe Eweka Dashboard)
-- Port: `563` (SSL)
-- Username & Passwort
+[**Eweka**](https://www.eweka.nl/) is what ClezJelly is tuned for. It has a fast EU backbone and very long retention. Any provider works, though.
 
-### 2. NZBGeek — Indexer (Pflicht)
+After signing up, note down:
 
-- **URL:** https://nzbgeek.info/
-- **Tarif:** Standard (~$12/Jahr)
-- **Fokus:** Allgemein stark bei englischen Releases, aber alles dabei
+- Server: `news.eweka.nl` (SSL port `563`)
+- Username and password
 
-Nach dem Signup findest du im Profil:
-- API-URL: `https://api.nzbgeek.info`
-- API-Key
+The installer asks for these. A plan with unlimited traffic is the sensible choice, since every stream is a download.
 
-### 3. Zweiter Indexer für Redundanz & deutsche Inhalte (empfohlen)
+### 2. Indexer (required)
 
-> **Wichtig:** Die früher empfohlenen dedizierten DE-Indexer (nzb.cat, SceneNZBs, Newz Complex) sind alle offline. Es gibt heute **keinen** reinen DE-API-Indexer mehr. Lösung: mehrere Allgemein-Indexer parallel in Prowlarr → sie tragen die DE-Scene-Releases mit, nur ohne „German"-Flag — die TRaSH-Custom-Formats fischen sie dann über Scene-Tags (`.GERMAN.`, `.GER.`, `.ML.`) raus.
+[**NZBGeek**](https://nzbgeek.info/) is a solid all-rounder and the default in the installer. From your profile, note down:
 
-Nimm **einen oder zwei** der folgenden zusätzlich zu NZBGeek:
+- Your **API key**
 
-| Indexer | Signup | Preis | DE-Qualität |
-|---|---|---|---|
-| **DrunkenSlug** | Invite-only (r/UsenetInvites) | $15/Jahr | ⭐⭐⭐⭐ |
-| **NZBPlanet** | Oft open | €15/Jahr | ⭐⭐⭐ |
-| **NZB.su** | Open Signup | kostenlos/Donate | ⭐⭐⭐ |
-| **DogNZB** | Invite-only, zeitweise offen | donate | ⭐⭐⭐⭐ |
-| **NinjaCentral** | Open ~24h an Feiertagen (Black Friday, 4. Mai) | $5-10 | ⭐⭐⭐ |
-| **NZBFinder** | Zeitweise open | ~€10/Jahr | ⭐⭐⭐ |
+### 3. Second indexer (recommended)
 
-**Praktischer Pfad:**
-1. NZBGeek als Basis (schon oben)
-2. [r/UsenetInvites](https://reddit.com/r/UsenetInvites) checken — oft Invites für DrunkenSlug / DogNZB
-3. Falls kein Invite erreichbar: [r/usenet](https://reddit.com/r/usenet) im Auge behalten für Open-Signup-Fenster
+More indexers means more chances of finding a release, especially German ones. The installer lets you enter a second one. Pick whichever you can get into:
 
-Nach dem Signup findest du im Profil des jeweiligen Indexers:
-- API-URL
-- API-Key
+| Indexer | Signup | Notes |
+|---|---|---|
+| DrunkenSlug | Invite only | Very good quality. Check [r/UsenetInvites](https://reddit.com/r/UsenetInvites) |
+| NZBPlanet | Often open | Paid |
+| NZB.su | Open | Free or donation |
+| DogNZB | Invite only, sometimes open | Good quality |
+| NinjaCentral | Short open windows on holidays | Cheap |
+| NZBFinder | Sometimes open | Paid |
 
-### 4. Optional — Boards für Deep-Catalog (manuell, kein API)
+Three indexers is the sweet spot. More adds little and can hit rate limits.
 
-Für obskure deutsche Releases, die kein API-Indexer kennt, kannst du zusätzlich einen deutschen Board-Account anlegen. Boards haben kein API, du suchst manuell im Browser:
+> Indexer availability changes all the time. If one is closed when you read this, any other works. You can add or change indexers later with `./install.sh credentials`.
 
-- **Sky of Usenet** — meist open Signup, solider DE-Content
-- **Brothers of Usenet (BoU)** — vergleichsweise offene Community, breit
-- **House of Usenet (HoU)** — closed/invite, aber tiefster DE-Katalog
+### 4. Optional: German boards
 
-Workflow: NZB manuell runterladen → direkt in AltMount hochladen (Upload-Button in der Web-UI).
+For rare German releases that no API indexer lists, a board account (Sky of Usenet, Brothers of Usenet, House of Usenet) lets you search by hand and upload the NZB in AltMount's web UI. This is entirely optional.
 
-## Vor-Setup-Checkliste
+## Checklist
 
-Bevor du `./install.sh` startest, hake ab:
+Before you start the installer:
 
-- [ ] MacBook im Netzwerk, Samsung TV ebenso
-- [ ] Jellyfin-App auf dem TV installiert
-- [ ] Homebrew installiert und funktioniert (`brew --version`)
-- [ ] OrbStack installiert und läuft (oder Docker Desktop)
-- [ ] Eweka-Account aktiv, Credentials notiert
-- [ ] NZBGeek-API-Key notiert
-- [ ] Mindestens ein zweiter Indexer-API-Key notiert (siehe Tabelle oben)
-- [ ] Dieser Ordner (`ClezJelly`) existiert auf dem Desktop
+- [ ] Mac and TV are on the same network
+- [ ] Homebrew works (`brew --version`)
+- [ ] OrbStack or Docker Desktop is installed and **running**
+- [ ] Usenet provider login at hand
+- [ ] Indexer API key(s) at hand
+- [ ] Jellyfin app installed on your TV
 
-Wenn alles check ist → weiter zu [`02-installation.md`](02-installation.md).
+All set? On to [02 · Installation](02-installation.md).

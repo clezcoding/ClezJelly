@@ -1,125 +1,136 @@
 #!/usr/bin/env bash
 # ──────────────────────────────────────────────────────────────────
-# Phase 3: Config-Files für alle Services generieren
+# Phase 3 · Folders & config files
 #
-# Erwartet, dass die Credentials als Env-Vars gesetzt sind
-# (via credentials_collect oder credentials_load).
+# Seeds each service's config from config-templates/ — but never clobbers a
+# config the service has already written (your UI changes are safe).
+#
+#   configs_generate seed      only create what is missing        (default)
+#   configs_generate altmount  also rewrite AltMount's config     (new provider keys)
+#   configs_generate all       rewrite everything, with a backup
 # ──────────────────────────────────────────────────────────────────
 
 [[ -z "${CLEZJELLY_COMMON_LOADED:-}" ]] && source "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh"
 
-configs_generate() {
-  log_header "Phase 3 · Config-Files erzeugen"
-
-  local tpl_dir="${CLEZJELLY_ROOT}/config-templates"
-  local cfg_dir="${CLEZJELLY_ROOT}/config"
-
-  mkdir -p "$cfg_dir"/{altmount,prowlarr,radarr,sonarr,bazarr,seerr}
-
-  # ── AltMount ────────────────────────────────────────────────────
-  log_step "AltMount config.yaml"
-  envsubst < "$tpl_dir/altmount.config.yaml" > "$cfg_dir/altmount/config.yaml"
-  log_ok "config/altmount/config.yaml ($(wc -l < "$cfg_dir/altmount/config.yaml") Zeilen)"
-
-  # ── Prowlarr ────────────────────────────────────────────────────
-  log_step "Prowlarr config.xml"
-  envsubst < "$tpl_dir/prowlarr.config.xml" > "$cfg_dir/prowlarr/config.xml"
-  log_ok "config/prowlarr/config.xml"
-
-  # ── Radarr ──────────────────────────────────────────────────────
-  log_step "Radarr config.xml"
-  envsubst < "$tpl_dir/radarr.config.xml" > "$cfg_dir/radarr/config.xml"
-  log_ok "config/radarr/config.xml"
-
-  # ── Sonarr ──────────────────────────────────────────────────────
-  log_step "Sonarr config.xml"
-  envsubst < "$tpl_dir/sonarr.config.xml" > "$cfg_dir/sonarr/config.xml"
-  log_ok "config/sonarr/config.xml"
-
-  # ── Bazarr ──────────────────────────────────────────────────────
-  log_step "Bazarr config.ini"
-  # Bazarr erstellt beim ersten Start config.ini automatisch, wir patchen Auth-Setting
-  mkdir -p "$cfg_dir/bazarr"
-  cat > "$cfg_dir/bazarr/config.ini" <<EOF
-[general]
-ip = 0.0.0.0
-port = 6767
-base_url = /
-path_mappings = []
-path_mappings_movie = []
-subfolder = current
-subfolder_custom =
-upgrade_subs = True
-upgrade_frequency = 12
-days_to_upgrade_subs = 7
-upgrade_manual = True
-anti_captcha_provider =
-anti_captcha_key =
-auth_type = form
-auth_username = admin
-auth_password =
-single_language = False
-minimum_score = 70
-use_scenename = True
-use_postprocessing = False
-postprocessing_cmd =
-use_sonarr = True
-use_radarr = True
-page_size = 25
-enabled_providers = ['opensubtitlescom']
-enabled_integrations = []
-multithreading = True
-chmod = 0640
-chmod_enabled = False
-
-[sonarr]
-ip = sonarr
-port = 8989
-base_url = /
-ssl = False
-apikey = ${SONARR_API_KEY}
-full_update = Daily
-only_monitored = False
-
-[radarr]
-ip = radarr
-port = 7878
-base_url = /
-ssl = False
-apikey = ${RADARR_API_KEY}
-full_update = Daily
-only_monitored = False
-EOF
-  log_ok "config/bazarr/config.ini"
-
-  # ── Seerr ───────────────────────────────────────────────────────
-  log_step "Seerr settings.json"
-  cat > "$cfg_dir/seerr/settings.json" <<EOF
-{
-  "clientId": "$(openssl rand -hex 16)",
-  "vapidPrivate": "",
-  "vapidPublic": "",
-  "main": {
-    "apiKey": "$(gen_api_key)",
-    "applicationTitle": "ClezJelly",
-    "applicationUrl": "",
-    "trustProxy": false,
-    "csrfProtection": false,
-    "cacheImages": false,
-    "defaultPermissions": 32,
-    "defaultQuotas": {"movie": {"quotaLimit": 0, "quotaDays": 7}, "tv": {"quotaLimit": 0, "quotaDays": 7}},
-    "hideAvailable": false,
-    "localLogin": true,
-    "newPlexLogin": true,
-    "region": "AT",
-    "originalLanguage": "de",
-    "youtubeUrl": ""
-  }
+folders_setup() {
+  log_step "Folders"
+  cd "$CLEZJELLY_ROOT" || return 1
+  local d
+  for d in config/altmount config/prowlarr config/radarr config/sonarr config/bazarr config/seerr \
+           data/strm data/library/movies data/library/tv logs; do
+    mkdir -p "$d"
+  done
+  log_ok "config/ · data/strm · data/library/{movies,tv}"
 }
-EOF
-  log_ok "config/seerr/settings.json"
 
-  # Berechtigungen
-  chmod -R 755 "$cfg_dir"
-  log_ok "Berechtigungen gesetzt"
+# Back up an existing file into config/.backups/<timestamp>/
+_backup_config() {
+  local src="$1" label="$2"
+  local dir="${CLEZJELLY_ROOT}/config/.backups/${CONFIG_STAMP}"
+  mkdir -p "$dir"
+  cp "$src" "${dir}/${label}"
+}
+
+# _seed <label> <dest> <template> <force:true|false> VAR...
+_seed() {
+  local label="$1" dest="$2" tpl="$3" force="$4"; shift 4
+  if [[ -f "$dest" && "$force" != "true" ]]; then
+    log_info "$label: kept your existing file"
+    return 0
+  fi
+  if [[ -f "$dest" ]]; then _backup_config "$dest" "$label"; fi
+  render_template "$tpl" "$dest" "$@"
+  log_ok "$label"
+}
+
+# If a service already wrote a config.xml, trust its API key over a fresh one
+# (otherwise linking would fail with 401).
+_adopt_arr_key() {
+  local var="$1" file="$2" existing
+  [[ -f "$file" ]] || return 0
+  existing="$(sed -n 's:.*<ApiKey>\(.*\)</ApiKey>.*:\1:p' "$file" | head -n 1)"
+  if [[ -n "$existing" && "$existing" != "${!var}" ]]; then
+    printf -v "$var" '%s' "$existing"
+    export "${var?}"
+    KEYS_ADOPTED=true
+    log_info "$var: using the key already stored by the service"
+  fi
+}
+
+# Replace apikey under an INI section
+_patch_ini_apikey() {
+  local file="$1" section="$2" key="$3" tmp
+  tmp="$(mktemp)"
+  awk -v sec="[$section]" -v key="$key" '
+    /^\[/ { in_sec = ($0 == sec) }
+    in_sec && /^apikey[ ]*=/ { print "apikey = " key; next }
+    { print }
+  ' "$file" > "$tmp" && mv "$tmp" "$file"
+}
+
+configs_generate() {
+  local mode="${1:-seed}"
+  ui_phase 3 5 "Folders & configs"
+
+  folders_setup
+  components_derive
+
+  local tpl="${CLEZJELLY_ROOT}/config-templates"
+  local cfg="${CLEZJELLY_ROOT}/config"
+  CONFIG_STAMP="$(date +%Y%m%d-%H%M%S)"
+  KEYS_ADOPTED=false
+
+  local force_all=false force_alt=false
+  [[ "$mode" == "all" ]] && { force_all=true; force_alt=true; }
+  [[ "$mode" == "altmount" ]] && force_alt=true
+
+  log_step "Config files"
+
+  # Keys first, so every file below uses the final values
+  _adopt_arr_key PROWLARR_API_KEY "$cfg/prowlarr/config.xml"
+  _adopt_arr_key RADARR_API_KEY   "$cfg/radarr/config.xml"
+  _adopt_arr_key SONARR_API_KEY   "$cfg/sonarr/config.xml"
+
+  # AltMount: YAML-safe values
+  Y_EWEKA_HOST="$(yaml_squote "$EWEKA_HOST")"
+  Y_EWEKA_USER="$(yaml_squote "$EWEKA_USER")"
+  Y_EWEKA_PASS="$(yaml_squote "$EWEKA_PASS")"
+  case "$EWEKA_PORT" in
+    563|443|995|993) EWEKA_TLS=true ;;
+    *)               EWEKA_TLS=false ;;
+  esac
+  export Y_EWEKA_HOST Y_EWEKA_USER Y_EWEKA_PASS EWEKA_TLS
+
+  _seed "AltMount config.yaml" "$cfg/altmount/config.yaml" "$tpl/altmount.config.yaml" "$force_alt" \
+    Y_EWEKA_HOST EWEKA_PORT Y_EWEKA_USER Y_EWEKA_PASS EWEKA_TLS EWEKA_MAX_CONN \
+    ALTMOUNT_API_KEY RADARR_API_KEY SONARR_API_KEY PUBLIC_HOST
+  _seed "Prowlarr config.xml" "$cfg/prowlarr/config.xml" "$tpl/prowlarr.config.xml" "$force_all" PROWLARR_API_KEY
+  _seed "Radarr config.xml"   "$cfg/radarr/config.xml"   "$tpl/radarr.config.xml"   "$force_all" RADARR_API_KEY
+  _seed "Sonarr config.xml"   "$cfg/sonarr/config.xml"   "$tpl/sonarr.config.xml"   "$force_all" SONARR_API_KEY
+
+  if [[ "$ENABLE_BAZARR" == "true" ]]; then
+    if [[ -f "$cfg/bazarr/config/config.ini" ]]; then
+      # linuxserver/bazarr keeps its config one level deeper
+      _patch_ini_apikey "$cfg/bazarr/config/config.ini" sonarr "$SONARR_API_KEY"
+      _patch_ini_apikey "$cfg/bazarr/config/config.ini" radarr "$RADARR_API_KEY"
+      log_info "Bazarr config.ini: refreshed Radarr/Sonarr keys"
+    else
+      mkdir -p "$cfg/bazarr/config"
+      _seed "Bazarr config.ini" "$cfg/bazarr/config/config.ini" "$tpl/bazarr.config.ini" "$force_all" \
+        RADARR_API_KEY SONARR_API_KEY
+    fi
+  fi
+
+  if [[ "$KEYS_ADOPTED" == "true" ]]; then
+    if [[ -n "${CLEZ_PASSPHRASE:-}" ]]; then
+      local plain k
+      plain="$(mktemp)"; chmod 600 "$plain"
+      { for k in $CRED_KEYS; do printf '%s=%s\n' "$k" "${!k}"; done; } > "$plain"
+      crypto_encrypt_file "$plain" "$CREDS_FILE" "$CLEZ_PASSPHRASE"
+      rm -f "$plain"
+      log_ok ".env.local updated with the adopted keys"
+    else
+      log_warn "Adopted existing service keys — run 'Credentials' once to refresh .env.local"
+    fi
+  fi
 }
