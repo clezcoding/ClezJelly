@@ -4,83 +4,35 @@
 # ║   ClezJelly — Jellyfin Media-Server Installer                   ║
 # ║   Interaktive Einrichtung auf macOS                             ║
 # ║                                                                  ║
+# ║   Fragt Credentials, generiert Configs, startet Services,       ║
+# ║   verknüpft sie via API — fast vollständig automatisiert.       ║
+# ║                                                                  ║
 # ╚══════════════════════════════════════════════════════════════════╝
 
-# -u raus: Interaktive read-Dialoge und optionale Env-Vars sollen keine
-# Unbound-Variable-Errors werfen. Fehlerstrictheit via -e + pipefail bleibt.
+# -u raus: optionale Env-Vars (prompt_input default) sollen keine
+# Unbound-Variable-Errors werfen; -e + pipefail bleiben.
 set -eo pipefail
 
-# ── Farben ────────────────────────────────────────────────────────
-readonly RESET=$'\033[0m'
-readonly BOLD=$'\033[1m'
-readonly DIM=$'\033[2m'
-readonly RED=$'\033[0;31m'
-readonly GREEN=$'\033[0;32m'
-readonly YELLOW=$'\033[0;33m'
-readonly BLUE=$'\033[0;34m'
-readonly MAGENTA=$'\033[0;35m'
-readonly CYAN=$'\033[0;36m'
-
-readonly CHECK="${GREEN}✓${RESET}"
-readonly CROSS="${RED}✗${RESET}"
-readonly ARROW="${CYAN}➜${RESET}"
-readonly INFO="${BLUE}ℹ${RESET}"
-readonly WARN="${YELLOW}⚠${RESET}"
-readonly ROCKET="🚀"
-
+# ── Pfade ─────────────────────────────────────────────────────────
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-readonly SCRIPT_DIR
+export CLEZJELLY_ROOT="$SCRIPT_DIR"
 
-# ── Logging-Helpers ───────────────────────────────────────────────
-log_header() {
-  echo ""
-  echo "${BOLD}${MAGENTA}╔══════════════════════════════════════════════════════════════════╗${RESET}"
-  printf "${BOLD}${MAGENTA}║${RESET} ${BOLD}%-64s${RESET} ${BOLD}${MAGENTA}║${RESET}\n" "$1"
-  echo "${BOLD}${MAGENTA}╚══════════════════════════════════════════════════════════════════╝${RESET}"
-  echo ""
-}
+# ── Libs laden ────────────────────────────────────────────────────
+source "$SCRIPT_DIR/scripts/lib/common.sh"
+source "$SCRIPT_DIR/scripts/lib/crypto.sh"
+source "$SCRIPT_DIR/scripts/lib/api.sh"
 
-log_step()    { echo "${ARROW} ${BOLD}$1${RESET}"; }
-log_ok()      { echo "  ${CHECK} $1"; }
-log_err()     { echo "  ${CROSS} ${RED}$1${RESET}"; }
-log_info()    { echo "  ${INFO} ${DIM}$1${RESET}"; }
-log_warn()    { echo "  ${WARN} ${YELLOW}$1${RESET}"; }
-
-prompt_yes_no() {
-  local prompt="$1"
-  local default="${2:-y}"
-  local hint
-  if [[ "$default" == "y" ]]; then
-    hint="[Y/n]"
-  else
-    hint="[y/N]"
-  fi
-  while true; do
-    read -r -p "  ${BOLD}?${RESET} $prompt $hint " answer
-    answer="${answer:-$default}"
-    # bash 3.2 kompatibel (macOS-Default): tr statt ${var,,}
-    answer_lc="$(printf '%s' "$answer" | tr '[:upper:]' '[:lower:]')"
-    case "$answer_lc" in
-      y|yes|j|ja) return 0 ;;
-      n|no|nein)  return 1 ;;
-      *) echo "    ${DIM}Bitte y oder n eingeben.${RESET}" ;;
-    esac
-  done
-}
-
-prompt_input() {
-  local prompt="$1"
-  local default="${2:-}"
-  local hint=""
-  [[ -n "$default" ]] && hint=" ${DIM}(Default: $default)${RESET}"
-  local answer
-  read -r -p "  ${BOLD}?${RESET} $prompt$hint: " answer
-  echo "${answer:-$default}"
-}
+# ── Bootstrap-Phasen ──────────────────────────────────────────────
+source "$SCRIPT_DIR/scripts/bootstrap/01-preflight.sh"
+source "$SCRIPT_DIR/scripts/bootstrap/02-credentials.sh"
+source "$SCRIPT_DIR/scripts/bootstrap/03-generate-configs.sh"
+source "$SCRIPT_DIR/scripts/bootstrap/04-start-containers.sh"
+source "$SCRIPT_DIR/scripts/bootstrap/05-link-services.sh"
+source "$SCRIPT_DIR/scripts/bootstrap/06-trash-profiles.sh"
 
 # ── Banner ────────────────────────────────────────────────────────
 show_banner() {
-  clear
+  clear 2>/dev/null || true
   echo "${BOLD}${CYAN}"
   cat << 'EOF'
     _____ _          _      _ _
@@ -93,133 +45,20 @@ show_banner() {
                                 |___/
 EOF
   echo "${RESET}"
-  echo "${DIM}  Jellyfin Media-Server mit Usenet-Streaming${RESET}"
-  echo "${DIM}  macOS Edition · von Clemens, für Clemens${RESET}"
+  echo "${DIM}  Jellyfin + Usenet Media Stack · Automated Installer${RESET}"
   echo ""
 }
 
-# ── Preflight Checks ──────────────────────────────────────────────
-check_macos() {
-  log_step "macOS Check"
-  if [[ "$(uname -s)" != "Darwin" ]]; then
-    log_err "Dieses Script läuft nur auf macOS. Du bist auf $(uname -s)."
-    exit 1
-  fi
-  log_ok "macOS $(sw_vers -productVersion) auf $(uname -m)"
-}
-
-check_homebrew() {
-  log_step "Homebrew Check"
-  if ! command -v brew &>/dev/null; then
-    log_err "Homebrew ist nicht installiert."
-    log_info "Installiere mit:"
-    log_info '  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'
-    exit 1
-  fi
-  log_ok "Homebrew installiert: $(brew --version | head -1)"
-}
-
-check_docker() {
-  log_step "Docker Check"
-
-  # Detect runtime: OrbStack, Docker Desktop, Colima, Rancher Desktop…
-  local runtime="unbekannt"
-  if command -v orb &>/dev/null || [[ -d "/Applications/OrbStack.app" ]]; then
-    runtime="OrbStack"
-  elif [[ -d "/Applications/Docker.app" ]]; then
-    runtime="Docker Desktop"
-  elif command -v colima &>/dev/null; then
-    runtime="Colima"
-  fi
-
-  if ! command -v docker &>/dev/null; then
-    log_warn "Kein Docker-CLI gefunden."
-    log_info "Empfehlung für macOS: OrbStack (leichter, schneller als Docker Desktop)"
-    log_info "  brew install --cask orbstack"
-    log_info "Alternativ Docker Desktop:"
-    log_info "  brew install --cask docker"
-    exit 1
-  fi
-
-  if ! docker info &>/dev/null; then
-    log_err "Docker-Daemon läuft nicht ($runtime)."
-    case "$runtime" in
-      OrbStack)       log_info "Starten mit: open -a OrbStack" ;;
-      "Docker Desktop") log_info "Starten mit: open -a Docker" ;;
-      Colima)         log_info "Starten mit: colima start" ;;
-      *)              log_info "Bitte deine Docker-Runtime manuell starten." ;;
-    esac
-    exit 1
-  fi
-
-  log_ok "$runtime läuft: $(docker --version)"
-}
-
-check_jellyfin() {
-  log_step "Jellyfin Check"
-  if [[ -d "/Applications/Jellyfin.app" ]]; then
-    log_ok "Jellyfin.app bereits installiert"
-    return 0
-  fi
-  if prompt_yes_no "Jellyfin.app jetzt mit Homebrew installieren? (empfohlen für Hardware-Transcoding)"; then
-    brew install --cask jellyfin
-    log_ok "Jellyfin installiert"
-  else
-    log_warn "Jellyfin wird nicht installiert — du musst es selbst machen."
-  fi
-}
-
-check_openssl() {
-  log_step "OpenSSL Check"
-  if ! command -v openssl &>/dev/null; then
-    log_err "openssl fehlt. Installiere mit: brew install openssl"
-    exit 1
-  fi
-  log_ok "openssl verfügbar"
-}
-
-# ── Setup .env ────────────────────────────────────────────────────
-setup_env() {
-  log_header "Konfiguration"
-  log_step "Erstelle .env"
-
-  if [[ -f "$SCRIPT_DIR/.env" ]]; then
-    log_warn ".env existiert bereits."
-    if ! prompt_yes_no "Überschreiben?" "n"; then
-      log_info "Nutze bestehende .env"
-      return 0
-    fi
-  fi
-
-  local jwt_secret
-  jwt_secret="$(openssl rand -hex 32)"
-  local puid
-  puid="$(id -u)"
-  local pgid
-  pgid="$(id -g)"
-
-  cat > "$SCRIPT_DIR/.env" << EOF
-# Automatisch generiert von install.sh am $(date '+%Y-%m-%d %H:%M:%S')
-TZ=Europe/Vienna
-PUID=$puid
-PGID=$pgid
-ALTMOUNT_JWT_SECRET=$jwt_secret
-EOF
-  chmod 600 "$SCRIPT_DIR/.env"
-  log_ok ".env erstellt mit PUID=$puid PGID=$pgid"
-  log_ok "JWT-Secret generiert (chmod 600)"
-}
-
-# ── Ordnerstruktur anlegen ────────────────────────────────────────
-setup_folders() {
+# ── Setup-Ordnerstruktur ──────────────────────────────────────────
+folders_setup() {
   log_step "Ordnerstruktur anlegen"
-  cd "$SCRIPT_DIR"
+  cd "$CLEZJELLY_ROOT"
   local dirs=(
     "config/altmount"
     "config/prowlarr"
     "config/radarr"
     "config/sonarr"
-    "config/jellyseerr"
+    "config/seerr"
     "config/bazarr"
     "data/media/movies"
     "data/media/tv"
@@ -227,100 +66,217 @@ setup_folders() {
     "data/strm/tv"
     "data/metadata"
   )
-  for d in "${dirs[@]}"; do
-    mkdir -p "$d"
-  done
-  log_ok "Alle Ordner angelegt unter $SCRIPT_DIR/{config,data}"
-}
-
-# ── Docker Compose starten ────────────────────────────────────────
-start_stack() {
-  log_header "Services starten"
-  log_step "Images ziehen (das kann 1-2 Minuten dauern)…"
-  cd "$SCRIPT_DIR"
-  docker compose pull 2>&1 | sed 's/^/    /'
-  log_ok "Alle Images gezogen"
-
-  log_step "Container starten"
-  docker compose up -d 2>&1 | sed 's/^/    /'
-  log_ok "Stack läuft"
-
-  echo ""
-  log_step "Service-Status"
-  sleep 3
-  docker compose ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}" | sed 's/^/    /'
-}
-
-# ── Jellyfin starten ──────────────────────────────────────────────
-start_jellyfin() {
-  log_step "Jellyfin starten"
-  if [[ -d "/Applications/Jellyfin.app" ]]; then
-    open -a Jellyfin 2>/dev/null && log_ok "Jellyfin.app gestartet" || log_warn "Jellyfin lief vielleicht schon"
-  else
-    log_warn "Jellyfin.app nicht gefunden, überspringe"
-  fi
+  for d in "${dirs[@]}"; do mkdir -p "$d"; done
+  log_ok "Alle Ordner angelegt"
 }
 
 # ── Finale Nachricht ──────────────────────────────────────────────
 show_next_steps() {
-  log_header "Setup abgeschlossen ${ROCKET}"
+  log_header "Setup abgeschlossen 🚀"
 
-  echo "  ${BOLD}${GREEN}Nächste Schritte:${RESET}"
+  echo "  ${BOLD}${GREEN}Was JETZT noch manuell zu tun ist:${RESET}"
   echo ""
-  echo "  ${BOLD}1.${RESET} ${BOLD}AltMount${RESET} konfigurieren"
-  echo "     ${CYAN}http://localhost:8080${RESET}"
-  echo "     ${DIM}Admin-Account anlegen → Provider (Eweka) hinzufügen → Import = STRM${RESET}"
-  echo ""
-  echo "  ${BOLD}2.${RESET} ${BOLD}Prowlarr${RESET} — Indexer einrichten"
-  echo "     ${CYAN}http://localhost:9696${RESET}"
-  echo "     ${DIM}NZBGeek + mind. 1 weiterer Indexer, dann Apps (Radarr/Sonarr) verbinden${RESET}"
-  echo ""
-  echo "  ${BOLD}3.${RESET} ${BOLD}Radarr${RESET} — Film-Automation"
-  echo "     ${CYAN}http://localhost:7878${RESET}"
-  echo "     ${DIM}Root Folder: /movies, Download Client: AltMount (als SABnzbd)${RESET}"
-  echo ""
-  echo "  ${BOLD}4.${RESET} ${BOLD}Sonarr${RESET} — Serien-Automation"
-  echo "     ${CYAN}http://localhost:8989${RESET}"
-  echo "     ${DIM}Root Folder: /tv, Download Client: AltMount (als SABnzbd)${RESET}"
-  echo ""
-  echo "  ${BOLD}5.${RESET} ${BOLD}Jellyfin${RESET} — Media-Server"
+  echo "  ${BOLD}1.${RESET} ${BOLD}Jellyfin${RESET} — Setup-Wizard im Browser (einmalig)"
   echo "     ${CYAN}http://localhost:8096${RESET}"
-  echo "     ${DIM}Libraries hinzufügen, HW-Transcoding: VideoToolbox${RESET}"
+  echo "     ${DIM}• Sprache: Deutsch${RESET}"
+  echo "     ${DIM}• Admin-User anlegen${RESET}"
+  echo "     ${DIM}• Library 'Filme'  → /Users/\$USER/Desktop/ClezJelly/data/strm/movies${RESET}"
+  echo "     ${DIM}• Library 'Serien' → /Users/\$USER/Desktop/ClezJelly/data/strm/tv${RESET}"
+  echo "     ${DIM}• Playback → Hardware-Accel: VideoToolbox${RESET}"
   echo ""
-  echo "  ${BOLD}6.${RESET} ${BOLD}Jellyseerr${RESET} — Request-UI"
+  echo "  ${BOLD}2.${RESET} ${BOLD}Seerr${RESET} — Login mit Jellyfin (einmalig)"
   echo "     ${CYAN}http://localhost:5055${RESET}"
-  echo "     ${DIM}Mit Jellyfin, Radarr, Sonarr verbinden${RESET}"
+  echo "     ${DIM}• 'Sign in with Jellyfin'${RESET}"
+  echo "     ${DIM}• Jellyfin URL: http://host.docker.internal:8096${RESET}"
+  echo "     ${DIM}• Services → Radarr/Sonarr sind bereits konfiguriert${RESET}"
   echo ""
-  echo "  ${BOLD}7.${RESET} ${BOLD}Bazarr${RESET} — Untertitel"
-  echo "     ${CYAN}http://localhost:6767${RESET}"
-  echo "     ${DIM}OpenSubtitles.com + Deutsch/Englisch, mit Radarr/Sonarr verbinden${RESET}"
+  echo "  ${BOLD}3.${RESET} ${BOLD}Samsung TV${RESET} — Jellyfin-App verbinden"
+  echo "     ${DIM}• Mac-IP:  ipconfig getifaddr en0${RESET}"
+  echo "     ${DIM}• TV-App → http://<Mac-IP>:8096${RESET}"
   echo ""
-  echo "  ${BOLD}${YELLOW}Detaillierte Anleitung:${RESET} ${DIM}docs/03-configuration.md${RESET}"
+  echo "  ${BOLD}${YELLOW}Alles andere ist konfiguriert:${RESET}"
+  echo "  ${GREEN}✓${RESET} AltMount:  Eweka-Provider, SABnzbd-API, Import-STRM"
+  echo "  ${GREEN}✓${RESET} Prowlarr:  Indexer + Radarr/Sonarr Apps verknüpft"
+  echo "  ${GREEN}✓${RESET} Radarr:    Root Folder, AltMount als Download-Client"
+  echo "  ${GREEN}✓${RESET} Sonarr:    Root Folder, AltMount als Download-Client"
+  echo "  ${GREEN}✓${RESET} Bazarr:    Radarr+Sonarr verlinkt, OpenSubtitles.com"
+  echo "  ${GREEN}✓${RESET} Credentials verschlüsselt in .env.local"
   echo ""
-  echo "  ${DIM}Praktische Commands:${RESET}"
-  echo "    ${DIM}./scripts/start-stack.sh${RESET}    ${DIM}# Stack starten${RESET}"
-  echo "    ${DIM}./scripts/stop-stack.sh${RESET}     ${DIM}# Stack stoppen${RESET}"
-  echo "    ${DIM}./scripts/health-check.sh${RESET}   ${DIM}# Status checken${RESET}"
-  echo "    ${DIM}docker compose logs -f${RESET}      ${DIM}# Live-Logs${RESET}"
+  echo "  ${DIM}Web-UIs auf einen Blick:${RESET}"
+  echo "    ${CYAN}http://localhost:8080${RESET}  AltMount"
+  echo "    ${CYAN}http://localhost:9696${RESET}  Prowlarr"
+  echo "    ${CYAN}http://localhost:7878${RESET}  Radarr"
+  echo "    ${CYAN}http://localhost:8989${RESET}  Sonarr"
+  echo "    ${CYAN}http://localhost:5055${RESET}  Seerr"
+  echo "    ${CYAN}http://localhost:6767${RESET}  Bazarr"
+  echo "    ${CYAN}http://localhost:8096${RESET}  Jellyfin"
   echo ""
 }
 
-# ── Main ──────────────────────────────────────────────────────────
-main() {
-  show_banner
+# ── Aktionen ──────────────────────────────────────────────────────
+action_full_install() {
+  preflight_run || return 1
+  credentials_collect
+  folders_setup
+  configs_generate
+  containers_start
+  services_link
+  if [[ "$PREFER_GERMAN" == "true" ]]; then
+    trash_profiles_apply
+  fi
 
-  log_header "Preflight Checks"
-  check_macos
-  check_homebrew
-  check_docker
-  check_jellyfin
-  check_openssl
+  # Jellyfin starten
+  if [[ -d "/Applications/Jellyfin.app" ]]; then
+    open -a Jellyfin 2>/dev/null && log_ok "Jellyfin.app gestartet" || true
+  fi
 
-  setup_env
-  setup_folders
-  start_stack
-  start_jellyfin
   show_next_steps
 }
 
-main "$@"
+action_update_credentials() {
+  log_header "Credentials aktualisieren"
+  log_info "Alte .env.local wird mit neuer Passphrase/Daten überschrieben."
+  if [[ -f "$CLEZJELLY_ROOT/.env.local" ]]; then
+    if prompt_yes_no "Bestehende .env.local sichern (.env.local.bak)?"; then
+      cp "$CLEZJELLY_ROOT/.env.local" "$CLEZJELLY_ROOT/.env.local.bak"
+      log_ok "Backup erstellt"
+    fi
+  fi
+  credentials_collect
+  configs_generate
+  if prompt_yes_no "Container mit neuen Configs neustarten?"; then
+    cd "$CLEZJELLY_ROOT"
+    docker compose restart
+    log_ok "Container neugestartet"
+  fi
+}
+
+action_relink_services() {
+  log_header "Services neu verknüpfen (API)"
+  credentials_load || return 1
+  services_link
+}
+
+action_apply_trash() {
+  log_header "TRaSH German-Profile anwenden"
+  credentials_load || return 1
+  PREFER_GERMAN=true trash_profiles_apply
+}
+
+action_regenerate_configs() {
+  log_header "Config-Files regenerieren"
+  credentials_load || return 1
+  configs_generate
+  log_info "Container neustarten damit sie die neuen Configs lesen:"
+  log_info "  docker compose restart"
+}
+
+action_backup_env() {
+  log_header "Backup .env.local"
+  local src="$CLEZJELLY_ROOT/.env.local"
+  if [[ ! -f "$src" ]]; then
+    log_err "Keine .env.local vorhanden"
+    return 1
+  fi
+  local dst="$HOME/clezjelly.env.local.$(date +%Y%m%d-%H%M%S).bak"
+  cp "$src" "$dst"
+  chmod 600 "$dst"
+  log_ok "Gesichert nach: $dst"
+}
+
+action_restore_env() {
+  log_header "Restore .env.local"
+  local path
+  path="$(prompt_input 'Pfad zum Backup' "$HOME/clezjelly.env.local.*.bak")"
+  path="$(ls -1 $path 2>/dev/null | tail -1)"
+  if [[ ! -f "$path" ]]; then
+    log_err "Backup nicht gefunden"
+    return 1
+  fi
+  cp "$path" "$CLEZJELLY_ROOT/.env.local"
+  chmod 600 "$CLEZJELLY_ROOT/.env.local"
+  log_ok "Restored aus $path"
+}
+
+action_status() {
+  log_header "Stack Status"
+  cd "$CLEZJELLY_ROOT"
+  docker compose ps 2>&1
+  echo ""
+  log_step "Service-Checks"
+  for ep in \
+    "AltMount|http://localhost:8080" \
+    "Prowlarr|http://localhost:9696/ping" \
+    "Radarr|http://localhost:7878/ping" \
+    "Sonarr|http://localhost:8989/ping" \
+    "Seerr|http://localhost:5055/api/v1/status" \
+    "Bazarr|http://localhost:6767" \
+    "Jellyfin|http://localhost:8096"; do
+    IFS='|' read -r name url <<< "$ep"
+    code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 "$url" 2>/dev/null || echo 000)"
+    if [[ "$code" =~ ^[234] ]]; then
+      log_ok "$name ($url)"
+    else
+      log_err "$name ($url) → $code"
+    fi
+  done
+}
+
+# ── Menü ──────────────────────────────────────────────────────────
+show_menu() {
+  echo ""
+  echo "${BOLD}Was möchtest du tun?${RESET}"
+  echo ""
+  echo "  ${BOLD}1)${RESET} 🚀 Fresh Install (empfohlen für Erst-Setup)"
+  echo "  ${BOLD}2)${RESET} 🔑 Credentials ändern / erneuern"
+  echo "  ${BOLD}3)${RESET} 🔗 Services neu verknüpfen (API)"
+  echo "  ${BOLD}4)${RESET} 🇩🇪 TRaSH German-Profile anwenden"
+  echo "  ${BOLD}5)${RESET} 📝 Config-Files regenerieren"
+  echo "  ${BOLD}6)${RESET} 💾 Backup .env.local"
+  echo "  ${BOLD}7)${RESET} ♻️  Restore .env.local"
+  echo "  ${BOLD}8)${RESET} 🩺 Status checken"
+  echo "  ${BOLD}q)${RESET} Beenden"
+  echo ""
+}
+
+main_menu() {
+  while true; do
+    show_banner
+    show_menu
+    local choice
+    read -r -p "  ${BOLD}Wahl${RESET} [1-8/q]: " choice
+    case "$choice" in
+      1) action_full_install; break ;;
+      2) action_update_credentials; break ;;
+      3) action_relink_services; break ;;
+      4) action_apply_trash; break ;;
+      5) action_regenerate_configs; break ;;
+      6) action_backup_env ;;
+      7) action_restore_env ;;
+      8) action_status ;;
+      q|Q) echo "Bis bald."; exit 0 ;;
+      *) log_warn "Ungültige Wahl"; sleep 1 ;;
+    esac
+  done
+}
+
+# ── Entry Point ───────────────────────────────────────────────────
+# Argumente: Direkt-Aufruf einer Action ohne Menü
+case "${1:-}" in
+  install)     show_banner; action_full_install ;;
+  credentials) show_banner; action_update_credentials ;;
+  relink)      show_banner; action_relink_services ;;
+  trash)       show_banner; action_apply_trash ;;
+  configs)     show_banner; action_regenerate_configs ;;
+  backup)      show_banner; action_backup_env ;;
+  restore)     show_banner; action_restore_env ;;
+  status)      show_banner; action_status ;;
+  "")          main_menu ;;
+  *)
+    show_banner
+    log_err "Unbekannte Action: $1"
+    echo ""
+    echo "Verfügbar: install | credentials | relink | trash | configs | backup | restore | status"
+    exit 1
+    ;;
+esac

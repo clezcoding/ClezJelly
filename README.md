@@ -1,250 +1,322 @@
-# 🎬 ClezJelly
+<h1 align="center">🎬 ClezJelly</h1>
 
-> Jellyfin Media-Server mit automatisiertem Usenet-Streaming — ohne lokalen Speicher.
-> Von Clemens, für Clemens.
+<p align="center">
+  <strong>Automatisierter Jellyfin Media-Server mit On-Demand Usenet-Streaming</strong><br>
+  <em>Keine Downloads. Kein lokaler Speicher. Nur schauen.</em>
+</p>
+
+<p align="center">
+  <a href="#-features"><img src="https://img.shields.io/badge/stack-jellyfin%20%2B%20altmount-blueviolet"></a>
+  <a href="#-security--sicherheit"><img src="https://img.shields.io/badge/credentials-encrypted-success"></a>
+  <a href="#-automation"><img src="https://img.shields.io/badge/setup-90%25%20automated-brightgreen"></a>
+  <a href="https://www.apple.com/macos/"><img src="https://img.shields.io/badge/platform-macOS-black?logo=apple"></a>
+</p>
+
+---
+
+## 📺 Was ist das?
+
+Ein vollständig vorkonfigurierter Media-Server-Stack für ein ungenutztes MacBook, das Serien und Filme **direkt aus dem Usenet streamt**, ohne sie herunterzuladen. Du requestest Content in einer schönen UI → ein paar Sekunden später erscheint er in deiner Jellyfin-Bibliothek → Play drücken, Stream läuft.
+
+> **Zielerlebnis:** Samsung TV an, Jellyfin öffnen, Serie suchen, Play drücken. Fertig.
+
+---
+
+## 🏗️ Architektur
 
 ```
-                        _____ _          _      _ _       
-                       / ____| |        | |    | | |      
-                      | |    | | ___ ___| | ___| | |_   _ 
-                      | |    | |/ _ \_  / |/ _ \ | | | | |
-                      | |____| |  __// /| |  __/ | | |_| |
-                       \_____|_|\___/___|_|\___|_|_|\__, |
-                                                     __/ |
-                                                    |___/ 
+┌──────────────────┐       LAN       ┌─────────────────────┐
+│  Samsung Tizen   │ ◄─────────────► │  Jellyfin (nativ)   │
+│  Jellyfin-App    │                 │  HW-Transcode       │
+└──────────────────┘                 │  via VideoToolbox   │
+                                     └──────────┬──────────┘
+                                                │ liest .strm
+         ┌──────────────────────────────────────┤
+         │                                      ▼
+         │                           ┌─────────────────────┐
+         ▼                           │  AltMount           │
+┌──────────────────┐                 │  Usenet-WebDAV      │
+│  Seerr           │                 │  SABnzbd-API        │
+│  Request-UI      │                 │  STRM-Import        │
+└────────┬─────────┘                 └──────────┬──────────┘
+         │                                      │ NNTP (SSL)
+         ▼                                      ▼
+┌──────────────────┐                 ┌─────────────────────┐
+│  Radarr/Sonarr   │ ────────────►   │  Eweka / Newshost.  │
+│  Automation      │                 │  Usenet Backbone    │
+└────────┬─────────┘                 └─────────────────────┘
+         │
+         ▼
+┌──────────────────┐
+│  Prowlarr        │ ◄──────── NZBGeek, DrunkenSlug, NZB.su …
+│  Indexer-Manager │
+└──────────────────┘
 ```
 
----
-
-## Was ist das?
-
-Ein kompletter, selbstgehosteter Media-Server-Stack für dein zweites MacBook M3 Pro. Du requestest Filme/Serien, der Stack lädt sie **nicht** herunter — stattdessen streamt er sie direkt aus dem Usenet auf deinen Samsung Tizen TV, mit einer schönen Jellyfin-Oberfläche.
-
-**Dein Erlebnis am Sonntagabend:**
-
-1. Samsung TV einschalten → Jellyfin öffnen
-2. „How I Met Your Mother" oder „Bergdoktor" eintippen
-3. In schöner Netflix-ähnlicher Oberfläche gelistet bekommen
-4. Play drücken → nach 5–10 Sekunden Buffer streamt es
-
-Keine lokale Platte, kein Festplatten-Management, keine zweistündigen Downloads.
+**Flow:**
+1. Du **requestest** eine Serie in Seerr
+2. Sonarr fragt Prowlarr nach besten NZBs über alle Indexer
+3. Sonarr schickt die NZB an AltMount (als wäre es SABnzbd)
+4. AltMount erzeugt sofort eine **virtuelle .strm-Datei** — kein Download!
+5. Sonarr importiert, Jellyfin scannt, Serie erscheint
+6. Beim **Play** zieht AltMount die Usenet-Artikel on-demand von Eweka
 
 ---
 
-## 🧩 Architektur
+## ⚡ Quick Start
 
-```
-┌─────────────────────┐
-│   Samsung Tizen TV  │
-│   (Jellyfin App)    │
-└──────────┬──────────┘
-           │ LAN
-           ▼
-┌─────────────────────┐       ┌────────────────────┐
-│  Jellyfin (nativ)   │◄──────│  Jellyseerr        │
-│  Hardware-Transcode │       │  (Request UI)      │
-│  via VideoToolbox   │       └─────────┬──────────┘
-└──────────┬──────────┘                 │
-           │ liest .strm                ▼
-           │                   ┌────────────────────┐
-           ▼                   │  Radarr + Sonarr   │
-┌─────────────────────┐        │  (Automation)      │
-│  AltMount           │◄───────┤                    │
-│  WebDAV + SABnzbd   │        └────────┬───────────┘
-│  Kompatibel-API     │                 │ API-Keys
-└──────────┬──────────┘                 ▼
-           │ NNTP                ┌──────────────────┐
-           ▼                     │  Prowlarr        │
-┌─────────────────────┐          │  (Indexer)       │
-│  Eweka Usenet       │          └────────┬─────────┘
-│  (NL, EU-schnell)   │                   │
-└─────────────────────┘                   ▼
-                                 ┌────────────────────┐
-                                 │  NZBGeek + 2nd Idx │
-                                 │  (DE+EN Suche)     │
-                                 └────────────────────┘
-```
+**Voraussetzung:** macOS, [Homebrew](https://brew.sh), [OrbStack](https://orbstack.dev) (oder Docker Desktop)
 
-### Datenfluss
-
-1. **Request:** Du suchst HIMYM in Jellyseerr → Request an Sonarr
-2. **Suche:** Sonarr fragt Prowlarr → NZBGeek + zweiter Indexer finden den besten deutschen Release
-3. **Übergabe:** Sonarr schickt die NZB an AltMount (als SABnzbd-API-Call)
-4. **Virtualisierung:** AltMount erzeugt sofort eine `.strm`-Datei in `/media/tv/HIMYM/...` → kein Download!
-5. **Import:** Sonarr importiert → benennt um → triggert Jellyfin-Scan
-6. **Playback:** Du drückst Play → Jellyfin öffnet die `.strm` → Stream kommt via WebDAV von AltMount → AltMount zieht die Usenet-Artikel on-demand von Eweka → ab zum TV
-
----
-
-## 💰 Kosten
-
-| Service | Monatlich |
-|---|---|
-| Eweka Classic (unlimited Usenet) | ~€9 |
-| NZBGeek Standard (jährliche Zahlung) | ~€1 |
-| Zweiter Indexer (DrunkenSlug / NZBPlanet / NZB.su) | ~€0–1 |
-| **Monatlich gesamt** | **~€10–11** |
-| **Hardware** | **€0** (MacBook hast du schon) |
-
-Zum Vergleich: Netflix Standard = €13,99/Monat.
-
----
-
-## 📋 Voraussetzungen
-
-- **MacBook M3 Pro** mit macOS Sonoma oder neuer (hast du)
-- **Samsung Tizen TV** mit installierter Jellyfin-App (hast du)
-- **Mindestens 40 Mbit/s Internet** (hast du)
-- **~5 GB freier Speicher** auf dem Mac (für Docker-Images und Config)
-- **Homebrew** installiert (`/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"`)
-- **Usenet-Provider-Account** → [Eweka](https://www.eweka.nl/) (NL, €9/Monat Classic)
-- **NZBGeek-Account** → [nzbgeek.info](https://nzbgeek.info/) ($12/Jahr)
-- **Zweiter Indexer** (empfohlen für DE-Content) → siehe [`docs/01-prerequisites.md`](docs/01-prerequisites.md). Es gibt keinen dedizierten DE-API-Indexer mehr; mehrere Allgemein-Indexer parallel ist die aktuelle Lösung.
-
----
-
-## 🚀 Installation
-
-### One-Line Quick Install (frisches MacBook)
-
-Klont das Repo nach `~/Desktop/ClezJelly` und startet den Installer. Einzige Voraussetzung: [Homebrew](https://brew.sh).
+### Variante A: One-Liner (neues System)
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/clezcoding/ClezJelly/main/scripts/quickstart.sh)
 ```
 
-Optional kann der Zielordner per Env-Variable überschrieben werden:
+Klont das Repo nach `~/Desktop/ClezJelly` und startet den Installer.
+
+### Variante B: Lokal
 
 ```bash
-CLEZJELLY_TARGET_DIR=~/Code/ClezJelly bash <(curl -fsSL …)
-```
-
-### Manueller Schnellstart (Repo schon da)
-
-```bash
+git clone https://github.com/clezcoding/ClezJelly.git ~/Desktop/ClezJelly
 cd ~/Desktop/ClezJelly
 ./install.sh
 ```
 
-Das Script führt dich durch alle Schritte interaktiv.
+---
 
-### Alle Guides im Detail
+## 🎛️ Installer-Menü
 
-Siehe `docs/`-Ordner:
+Beim Start öffnet sich ein Menü:
 
-1. [`docs/01-prerequisites.md`](docs/01-prerequisites.md) — Was du vorher brauchst
-2. [`docs/02-installation.md`](docs/02-installation.md) — Schritt-für-Schritt Installation
-3. [`docs/03-configuration.md`](docs/03-configuration.md) — Alle Services konfigurieren
-4. [`docs/04-german-content.md`](docs/04-german-content.md) — Deutsche Inhalte maximieren
-5. [`docs/05-samsung-tv.md`](docs/05-samsung-tv.md) — Jellyfin auf dem TV einrichten
-6. [`docs/06-troubleshooting.md`](docs/06-troubleshooting.md) — Wenn was schiefläuft
+```
+  1) 🚀 Fresh Install           — Erst-Setup, End-to-End
+  2) 🔑 Credentials ändern      — Eweka/Indexer-Keys neu, verschlüsselt
+  3) 🔗 Services neu verknüpfen — API-Links (Prowlarr→arr, arr→AltMount)
+  4) 🇩🇪 TRaSH German-Profile    — Custom Formats für DE-Priorität
+  5) 📝 Config-Files regenerieren
+  6) 💾 Backup .env.local
+  7) ♻️  Restore .env.local
+  8) 🩺 Status checken
+```
+
+Alle Aktionen auch per CLI:
+```bash
+./install.sh install       # Fresh Install
+./install.sh status        # Status aller Services
+./install.sh backup        # .env.local sichern
+./install.sh relink        # Nur API-Links neu
+```
 
 ---
 
-## 📂 Projektstruktur
+## 🤖 Automation
+
+Was der Installer **automatisch** macht:
+
+| Service | Vorkonfiguriert |
+|---|---|
+| **AltMount** | Provider (Eweka), SABnzbd-API, Categories, STRM-Import, ARR-Integration |
+| **Prowlarr** | API-Key, Auth, Indexer (NZBGeek + optional), Radarr/Sonarr als Apps |
+| **Radarr** | API-Key, Root Folder, AltMount als Download-Client, Custom Formats |
+| **Sonarr** | API-Key, Root Folder, AltMount als Download-Client, Custom Formats |
+| **Bazarr** | OpenSubtitles.com, DE+EN Sprach-Profile, Radarr/Sonarr-Links |
+| **Seerr** | API-Key, Region AT, Original-Sprache DE |
+
+**Manuell bleibt** (gesamt ~5 Minuten):
+
+| Service | Was | Warum |
+|---|---|---|
+| **Jellyfin** | Admin-User + Libraries anlegen | Setup-Wizard ohne Headless-Mode |
+| **Seerr** | Einmal mit Jellyfin einloggen | OAuth-Flow |
+| **TV** | Mac-IP eingeben | nur ein Mal |
+
+---
+
+## 🔐 Security & Sicherheit
+
+### Credentials-Verschlüsselung
+
+Alle Secrets (Eweka-Passwort, Indexer-API-Keys, interne API-Keys) werden in **`.env.local`** mit **AES-256-CBC + PBKDF2 (200k Iterationen)** verschlüsselt. Die Passphrase wird nur im Memory während des Setups gehalten.
+
+```
+.env.local        → verschlüsselt (git-ignored)
+config/*          → aus .env.local generiert, git-ignored
+data/             → komplett git-ignored
+```
+
+### Was NICHT ins Repo kommt (via `.gitignore`)
+
+- `.env`, `.env.local*` — alle Credentials
+- `config/` — generierte Service-Configs (enthalten API-Keys)
+- `data/` — Media-Library und STRM-Files
+- Alle `*.db`, `*.sqlite*`, `*.bak`
+
+### Netzwerk-Hygiene
+
+- **Keine Portfreigaben** nach außen nötig
+- Alle Services lauschen auf `localhost` (nicht `0.0.0.0`)
+- Usenet-Verbindung immer über **TLS/SSL Port 563**
+- Remote-Zugriff: **Tailscale** oder **WireGuard**, kein Reverse Proxy
+
+### Backup-Strategie
+
+```bash
+./install.sh backup
+# → ~/clezjelly.env.local.2026-10-10-023500.bak (verschlüsselt)
+```
+
+Dieses Backup auf externes Medium (nicht in Cloud mit Klarnamen-Account) sichern. Reicht aus, um auf einem neuen Gerät mit `./install.sh restore` → `./install.sh install` identisch neu aufzusetzen.
+
+### Nicht enthalten (bewusst)
+
+- Keine Login-Pages ins Internet gestellt
+- Kein Benutzer-System in Jellyfin aus Public-DNS
+- Keine Credentials in Git-History (gitignored von Anfang an)
+
+---
+
+## 📁 Repository-Struktur
 
 ```
 ClezJelly/
 ├── README.md                    # Dieses Dokument
-├── install.sh                   # Hauptinstallations-Skript (interaktiv)
-├── docker-compose.yml           # Der komplette Service-Stack
-├── .env.example                 # Vorlage für Credentials
-├── .gitignore                   # Was NICHT in Git kommt
+├── install.sh                   # Haupt-Installer mit Menü
+├── docker-compose.yml           # 6-Service-Stack
+├── .env.example                 # Vorlage (keine Secrets)
+├── .gitignore                   # Was nie committet wird
 ├── docs/                        # Detaillierte Anleitungen
-├── scripts/                     # Hilfs-Skripte (start/stop/update)
-└── config/                      # Service-Konfigurationen
-    └── altmount/
-        └── config.sample.yaml   # AltMount-Beispiel-Config
+│   ├── 01-prerequisites.md
+│   ├── 02-installation.md
+│   ├── 03-configuration.md
+│   ├── 04-german-content.md
+│   ├── 05-samsung-tv.md
+│   └── 06-troubleshooting.md
+├── config-templates/            # Templates für envsubst
+│   ├── altmount.config.yaml
+│   ├── prowlarr.config.xml
+│   ├── radarr.config.xml
+│   └── sonarr.config.xml
+└── scripts/
+    ├── quickstart.sh            # Curl|Bash One-Liner-Target
+    ├── start-stack.sh           # docker compose up
+    ├── stop-stack.sh            # docker compose down
+    ├── update-stack.sh          # pull + up + prune
+    ├── health-check.sh          # Service-Status
+    ├── push-to-github.sh        # Repo-Erstellung
+    ├── lib/
+    │   ├── common.sh            # Logging, Farben, Prompts
+    │   ├── crypto.sh            # openssl AES-256-CBC
+    │   └── api.sh               # curl + wait_for_url
+    └── bootstrap/
+        ├── 01-preflight.sh      # macOS, Brew, Docker, Jellyfin
+        ├── 02-credentials.sh    # Prompts + .env.local
+        ├── 03-generate-configs.sh
+        ├── 04-start-containers.sh
+        ├── 05-link-services.sh  # API-Verknüpfungen
+        └── 06-trash-profiles.sh # DE Custom Formats
 ```
 
 ---
 
-## 🔧 Service-Übersicht
+## 💰 Kosten (laufend)
 
-| Service | Port | Zweck | Web-UI |
-|---|---|---|---|
-| **Jellyfin** (nativ) | 8096 | Media-Server, UI für TV | http://localhost:8096 |
-| **AltMount** | 8080 | Usenet-Streaming via WebDAV | http://localhost:8080 |
-| **Prowlarr** | 9696 | Indexer-Manager | http://localhost:9696 |
-| **Radarr** | 7878 | Film-Automation | http://localhost:7878 |
-| **Sonarr** | 8989 | Serien-Automation | http://localhost:8989 |
-| **Jellyseerr** | 5055 | Request-UI | http://localhost:5055 |
-| **Bazarr** | 6767 | Untertitel-Automation | http://localhost:6767 |
+| Service | Monatlich |
+|---|---|
+| **Eweka Classic** (unlimited Usenet, NL-Backbone) | ~€9 |
+| **NZBGeek Standard** (Indexer) | ~€1 |
+| Zweiter Indexer (optional) | ~€0–1 |
+| **Gesamt** | **~€10–11** |
+
+Hardware: **€0** — läuft auf dem vorhandenen MacBook.
+
+> Vergleich: Ein einziges Netflix-Premium-Abo = €18/Monat.
 
 ---
 
-## ⚡ Quick Commands
+## 🖥️ Service-Übersicht
+
+| Service | URL | Funktion |
+|---|---|---|
+| **Jellyfin** (nativ) | <http://localhost:8096> | Media-Server, UI für TV |
+| **AltMount** | <http://localhost:8080> | Usenet-Streaming via WebDAV |
+| **Prowlarr** | <http://localhost:9696> | Indexer-Manager |
+| **Radarr** | <http://localhost:7878> | Film-Automation |
+| **Sonarr** | <http://localhost:8989> | Serien-Automation |
+| **Seerr** | <http://localhost:5055> | Request-UI |
+| **Bazarr** | <http://localhost:6767> | Untertitel |
+
+---
+
+## 🚦 Täglicher Betrieb
 
 ```bash
-# Stack starten
-./scripts/start-stack.sh
+./scripts/start-stack.sh   # Container + Jellyfin.app starten
+./scripts/stop-stack.sh    # Container stoppen
+./scripts/update-stack.sh  # Images aktualisieren + prune
+./scripts/health-check.sh  # Service-Status prüfen
+```
 
-# Stack stoppen
-./scripts/stop-stack.sh
-
-# Alle Container-Logs sehen
-docker compose logs -f
-
-# Nur AltMount-Logs
-docker compose logs -f altmount
-
-# Stack updaten (neueste Images)
-./scripts/update-stack.sh
-
-# Container-Status
-docker compose ps
+Oder via Installer-Menü:
+```bash
+./install.sh status
 ```
 
 ---
 
-## 🛡️ Sicherheit & Legal
+## 🧰 Troubleshooting
 
-**Was dieses Setup macht:**
-- Streamt Usenet-Inhalte über verschlüsselte TLS/SSL-NNTP-Verbindung (Port 563)
-- Keine Peer-to-Peer-Verbindungen (anders als Torrents) → deine IP erscheint in keinem Swarm
-- Alle Verbindungen gehen zu deinem Usenet-Provider, der die SSL-Entschlüsselung macht
+Siehe [`docs/06-troubleshooting.md`](docs/06-troubleshooting.md). Kurzübersicht:
 
-**Rechtlicher Hinweis:**
-In Österreich fällt das Streamen oder Herunterladen urheberrechtlich geschützter Werke ohne Lizenz unter § 42 UrhG. Dieses Setup ist technisch neutral — nutze es ausschließlich für Inhalte, zu deren Nutzung du berechtigt bist (eigene Rips, Public-Domain, Creative-Commons etc.). Die Projektmaintainer übernehmen keine Verantwortung für Fehlgebrauch.
-
-**Praktische Sicherheits-Checks:**
-- ✅ Jellyfin **nicht öffentlich ins Internet** stellen — nutze Tailscale für Remote-Zugriff
-- ✅ Starke Passwörter für Jellyfin, Jellyseerr und AltMount
-- ✅ TLS/SSL beim Usenet-Provider zwingend aktivieren
-- ✅ MacBook mit FileVault verschlüsselt halten
-- ❌ Keine Portfreigaben im Router für diese Services
+| Symptom | Lösung |
+|---|---|
+| Container down | `docker compose ps`, dann `docker compose logs <name>` |
+| Keine deutschen Treffer | `./install.sh trash` + Quality-Profile-Scores anpassen |
+| STRM-Datei spielt nicht | Prüfe `mount_path` in AltMount — muss von Jellyfin aus auflösbar sein |
+| Credentials vergessen | `./install.sh restore` aus Backup |
+| Alles kaputt | `./install.sh install` (nutzt bestehende `.env.local`) |
 
 ---
 
-## 🧪 Status Dashboard
+## 🧭 Workflow
 
-Nach dem Setup kannst du den Zustand des Stacks überprüfen:
+**Serie requesten:**
+1. **Seerr öffnen** auf Handy/Laptop: <http://localhost:5055> (oder via Tailscale von unterwegs)
+2. **Suchen & Request** (Staffel, Season)
+3. **Automatik läuft** — Sonarr findet, AltMount erzeugt STRM, Jellyfin scant
+4. **Nach wenigen Sekunden** in Jellyfin verfügbar → vom TV abspielen
+
+Siehe [`docs/03-configuration.md`](docs/03-configuration.md) für den vollständigen Konfigurationsguide.
+
+---
+
+## ⚖️ Legal
+
+Dieses Projekt stellt **nur die Infrastruktur** bereit — es enthält keine urheberrechtlich geschützten Inhalte und ermutigt nicht dazu, diese zu verletzen. Nutze es ausschließlich für Inhalte, zu deren Nutzung du berechtigt bist (eigene Rips, Public Domain, Creative Commons etc.). In Österreich: §§ 42, 91 UrhG beachten.
+
+Verantwortung liegt beim Betreiber.
+
+---
+
+## 🤝 Mitwirken
+
+Issues und PRs willkommen. Für Änderungen bitte lokal testen:
 
 ```bash
-./scripts/health-check.sh
+./install.sh status            # vor dem Change
+# ... Änderung ...
+shellcheck install.sh scripts/**/*.sh
+./install.sh status            # nach dem Change
 ```
 
-Zeigt an:
-- ✅ / ❌ für jeden Container
-- Jellyfin erreichbar?
-- AltMount verbunden mit Eweka?
-- Prowlarr Indexer online?
-- Letztes erfolgreich importiertes Media
+---
+
+## 📜 Lizenz
+
+MIT — siehe [LICENSE](LICENSE).
 
 ---
 
-## 📖 Weiterführende Links
-
-- [AltMount Doku](https://altmount.kipsilabs.top/)
-- [Jellyfin Doku](https://jellyfin.org/docs/)
-- [TRaSH-Guides](https://trash-guides.info/) — Qualitätsprofile für Radarr/Sonarr
-- [Eweka](https://www.eweka.nl/)
-- [NZBGeek](https://nzbgeek.info/)
-
----
-
-## 👨‍💻 Autor
-
-**Clemens Einetter** — [@clezcoding](https://github.com/clezcoding)
-
-Lizenz: MIT
+<p align="center">
+  <sub>Built by <a href="https://github.com/clezcoding">@clezcoding</a> · in Austria 🇦🇹</sub>
+</p>

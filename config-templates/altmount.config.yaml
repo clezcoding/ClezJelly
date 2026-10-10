@@ -1,0 +1,40 @@
+# AltMount — Automatisch generiert von ClezJelly install.sh
+# NICHT HÄNDISCH BEARBEITEN — Änderungen beim nächsten Setup überschrieben
+# ──────────────────────────────────────────────────────────────────
+
+auth:
+  login_required: false
+
+providers:
+  - host: ${EWEKA_HOST}
+    port: ${EWEKA_PORT}
+    username: ${EWEKA_USER}
+    password: ${EWEKA_PASS}
+    max_connections: ${EWEKA_MAX_CONN}
+    tls: true
+    inflight_requests: 10
+    enabled: true
+
+sabnzbd:
+  enabled: true
+  api_key: ${ALTMOUNT_SAB_API_KEY}
+  categories:
+    - name: movies
+      type: radarr
+    - name: tv
+      type: sonarr
+
+arrs:
+  enabled: true
+  queue_cleanup_enabled: true
+  queue_cleanup_interval_seconds: 300
+  queue_cleanup_grace_period_minutes: 5
+
+mount_path: http://host.docker.internal:8080
+import:
+  import_strategy: STRM
+  import_dir: /strm
+
+health:
+  enabled: true
+  check_interval_hours: 24

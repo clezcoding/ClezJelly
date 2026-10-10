@@ -2,19 +2,19 @@
 # ClezJelly .gitignore
 # ──────────────────────────────────────────────────────────────────
 
-# Credentials — niemals committen!
+# Credentials & Secrets — NIEMALS committen!
 .env
+.env.local
+.env.local.bak
+.env.local.*.bak
 *.env
 !.env.example
 
 # Service-Configs (enthalten API-Keys, Passwörter)
 config/*
-!config/altmount/
-config/altmount/*
-!config/altmount/config.sample.yaml
 !config/.gitkeep
 
-# Daten
+# Daten (Media, STRM-Files, Metadata)
 data/
 *.db
 *.sqlite
@@ -29,7 +29,7 @@ data/
 logs/
 *.log
 
-# Backup-Dateien
+# Backups / Swap
 *.bak
 *.backup
 *.swp
