@@ -95,7 +95,11 @@ Der Installer ist ein Menü. Wähle **1 · Install**, dann laufen fünf Phasen:
   <img src="docs/assets/installer-wiring.png" alt="Die Wiring-Phase des Installers" width="560">
 </p>
 
-Am Ende bekommst du ein „Ticket“ mit allen Adressen. Öffne Jellyfin, lege deinen Benutzer an, füge die zwei Bibliotheken hinzu (der Installer nennt dir die Ordner) und fertig. Die Klick-für-Klick-Anleitung steht in der [Installationsanleitung](docs/02-installation.md).
+Am Ende öffnet sich eine **Anleitungsseite im Browser**: eine Checkliste mit den wenigen Dingen, die nur du tun kannst (Jellyfin-Benutzer anlegen, zwei Bibliotheken hinzufügen, Fernseher verbinden), mit Kopieren-Buttons, Live-Status der Dienste und Lösungen, falls ein Schritt Aufmerksamkeit braucht. Öffne sie jederzeit neu mit `./install.sh guide`.
+
+<p align="center">
+  <img src="docs/assets/guide.png" alt="Die Anleitungsseite nach der Installation" width="520">
+</p>
 
 ---
 
@@ -126,6 +130,7 @@ config/<dienst>/    ein eigener Konfigurationsordner pro Dienst
 
 ```bash
 ./install.sh            # das Menü
+./install.sh guide      # Checkliste erneut öffnen
 ./install.sh status     # Zustand aller Dienste
 ./install.sh up         # starten (öffnet auch Jellyfin)
 ./install.sh down       # stoppen
@@ -144,6 +149,7 @@ config/<dienst>/    ein eigener Konfigurationsordner pro Dienst
 | `relink` | Verbindungen zwischen den Diensten reparieren (gefahrlos wiederholbar) |
 | `german` | Deutsche Qualitätsformate (erneut) anwenden |
 | `rebuild` | Konfigurationen aus den Vorlagen neu anlegen (deine Dateien werden vorher gesichert) |
+| `guide` | Die „Was jetzt?“-Checkliste im Browser öffnen |
 | `status` | Alle Dienste prüfen |
 | `up` / `down` / `update` | Den Stack steuern |
 | `backup` / `restore` | Secrets oder Snapshot, abgelegt in `~/ClezJelly-backups` |

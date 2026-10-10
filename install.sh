@@ -6,8 +6,8 @@
 # ║  downloaded. Run it with no arguments for the menu, or:          ║
 # ║                                                                  ║
 # ║    ./install.sh install | components | credentials | relink      ║
-# ║                 german | rebuild | status | up | down | update   ║
-# ║                 backup | restore | help                          ║
+# ║                 guide | german | rebuild | status | up | down    ║
+# ║                 update | backup | restore | help                 ║
 # ╚══════════════════════════════════════════════════════════════════╝
 
 # No `set -u`: optional env vars may legitimately be unset (bash 3.2 on macOS).
@@ -27,6 +27,7 @@ chmod 600 "$UI_LOG" 2>/dev/null || true
 source "$SCRIPT_DIR/scripts/lib/common.sh"
 source "$SCRIPT_DIR/scripts/lib/crypto.sh"
 source "$SCRIPT_DIR/scripts/lib/api.sh"
+source "$SCRIPT_DIR/scripts/lib/guide.sh"
 source "$SCRIPT_DIR/scripts/bootstrap/00-components.sh"
 source "$SCRIPT_DIR/scripts/bootstrap/01-preflight.sh"
 source "$SCRIPT_DIR/scripts/bootstrap/02-credentials.sh"
@@ -63,67 +64,63 @@ stack_status_line() {
 }
 
 _menu_item() {
-  ui_card_line "$(printf '%s%-2s%s %s%-17s%s %s%s%s' "$BOLD" "$1" "$RESET" "$C_TEXT" "$2" "$RESET" "$C_MUTE" "$3" "$RESET")"
+  printf '   %s%-2s%s %s%-16s%s %s%s%s\n' "$BOLD$C_VIOLET" "$1" "$RESET" "$BOLD" "$2" "$RESET" "$C_MUTE" "$3" "$RESET"
 }
 
-show_menu() {
-  printf '  %sStack%s   %s\n\n' "$C_MUTE" "$RESET" "$(stack_status_line)"
-  ui_card_open "SET UP"
-  _menu_item 1 "Install"        "guided first-time setup"
-  _menu_item 2 "Components"     "choose what's included"
-  ui_card_sep "MAINTAIN"
-  _menu_item 3 "Credentials"    "change provider or indexers"
-  _menu_item 4 "Re-link"        "repair the connections between services"
-  _menu_item 5 "German formats" "prefer German releases"
-  _menu_item 6 "Rebuild configs" "re-seed config files (with backup)"
-  ui_card_sep "OPERATE"
-  _menu_item 7 "Status"         "check every service"
-  _menu_item 8 "Stack"          "start · stop · restart · update"
-  _menu_item 9 "Backup"         "secrets or a full snapshot"
-  ui_card_close
-  printf '  %sq%s  quit\n\n' "$BOLD" "$RESET"
+is_installed() { [[ -f "$CREDS_FILE" ]]; }
+
+# First visit: no numbers to puzzle over, just one clear next step
+show_welcome() {
+  printf '  %sTurn this Mac into your own streaming service.%s\n' "$BOLD" "$RESET"
+  printf '  %sThe setup takes about 5 minutes and runs by itself.%s\n\n' "$C_MUTE" "$RESET"
+  printf '  %sKeep these at hand:%s\n' "$C_MUTE" "$RESET"
+  printf '   %s·%s your Usenet provider login %s(e.g. Eweka)%s\n' "$C_VIOLET" "$RESET" "$C_MUTE" "$RESET"
+  printf '   %s·%s an indexer API key %s(e.g. NZBGeek)%s\n\n' "$C_VIOLET" "$RESET" "$C_MUTE" "$RESET"
+  printf '  %s▸ Press Enter to begin%s\n\n' "$BOLD$C_PINK" "$RESET"
+  printf '  %sm%s more options    %sq%s quit\n\n' "$BOLD" "$RESET" "$BOLD" "$RESET"
+}
+
+# After install: four everyday choices, everything else tucked away
+show_home() {
+  printf '   %s\n\n' "$(stack_status_line)"
+  _menu_item 1 "Your guide"    "what's left to do, with a checklist"
+  _menu_item 2 "Check health"  "is everything working?"
+  _menu_item 3 "Start / stop"  "also: restart, update, logs"
+  _menu_item 4 "More"          "settings, repair, backup"
+  echo ""
+  printf '   %sq%s quit\n\n' "$BOLD" "$RESET"
+}
+
+show_more() {
+  printf '  %sMore%s\n\n' "$BOLD" "$RESET"
+  _menu_item 1 "Components"     "choose what's included"
+  _menu_item 2 "Credentials"    "change provider or indexers"
+  _menu_item 3 "Repair"         "re-connect the services"
+  _menu_item 4 "German formats" "prefer German releases"
+  _menu_item 5 "Backup"         "secrets or a full snapshot"
+  _menu_item 6 "Rebuild"        "reset config files (with backup)"
+  echo ""
+  printf '   %sb%s back\n\n' "$BOLD" "$RESET"
 }
 
 show_done() {
-  local ip root="$CLEZJELLY_ROOT"
-  ip="$(lan_ip)"; [[ -z "$ip" ]] && ip="<this-mac-ip>"
+  local bad
+  bad="$(grep -c -E '^(warn|err)' "$WIRING_RESULTS" 2>/dev/null || true)"; bad="${bad:-0}"
 
   echo ""
   ui_ticket "CLEZJELLY CINEMA" "Tonight: you pick the film"
   echo ""
-  ui_card_open "Left for you  ${C_MUTE}(only you hold these logins)${RESET}"
-  ui_card_blank
-  ui_card_line "${BOLD}1${RESET}  ${BOLD}Jellyfin${RESET}  finish the setup wizard   ${C_BLUE}http://localhost:8096${RESET}"
-  ui_card_line "     ${C_MUTE}Movies library → ${root}/data/library/movies${RESET}"
-  ui_card_line "     ${C_MUTE}Shows library  → ${root}/data/library/tv${RESET}"
-  ui_card_line "     ${C_MUTE}Dashboard → Playback → Transcoding → Apple VideoToolbox${RESET}"
-  ui_card_blank
-  local n=2
-  if [[ "$ENABLE_SEERR" == "true" ]]; then
-    ui_card_line "${BOLD}${n}${RESET}  ${BOLD}Seerr${RESET}  sign in with Jellyfin   ${C_BLUE}http://localhost:5055${RESET}"
-    ui_card_line "     ${C_MUTE}Jellyfin URL: http://jellyfin:8096 · Radarr/Sonarr are already connected${RESET}"
-    ui_card_blank
-    n=$((n + 1))
+  if [ "$bad" -gt 0 ]; then
+    printf '  %s▲ Installed, but %s step(s) need a look:%s\n' "$C_WARN" "$bad" "$RESET"
+    grep -E '^(warn|err)' "$WIRING_RESULTS" | cut -f2 | sed 's/ *(details in .*)//' | sed 's/^/     · /'
+  else
+    printf '  %s✓ Installed and connected.%s\n' "$C_OK" "$RESET"
   fi
-  ui_card_line "${BOLD}${n}${RESET}  ${BOLD}Samsung TV${RESET}  install the Jellyfin app, server address:"
-  ui_card_line "     ${C_BLUE}http://${ip}:8096${RESET}"
-  if [[ "$ENABLE_BAZARR" == "true" ]]; then
-    ui_card_blank
-    ui_card_line "${C_MUTE}optional${RESET}  ${BOLD}Bazarr${RESET}  pick subtitle languages   ${C_BLUE}http://localhost:6767${RESET}"
-  fi
-  ui_card_blank
-  ui_card_close
-
   echo ""
-  ui_card_open "Already done"
-  ui_card_line "${C_OK}✓${RESET} AltMount     provider, STRM import, SABnzbd API, Radarr/Sonarr instances"
-  ui_card_line "${C_OK}✓${RESET} Prowlarr     indexers + Radarr/Sonarr connected"
-  ui_card_line "${C_OK}✓${RESET} Radarr·Sonarr  root folders in /data/library, AltMount as download client"
-  [[ "$ENABLE_GERMAN" == "true" ]] && ui_card_line "${C_OK}✓${RESET} German       DL +500 · German +400 · English +100 on your quality profile"
-  ui_card_line "${C_OK}✓${RESET} Secrets      AES-256 encrypted in .env.local"
-  ui_card_close
+  printf '  %sYour next steps are on a page that is opening in your browser.%s\n' "$BOLD" "$RESET"
+  guide_open || true
   echo ""
-  printf '  %sLog: logs/clezjelly.log · Menu any time: ./install.sh%s\n\n' "$C_MUTE" "$RESET"
+  printf '  %sReopen it any time: ./install.sh guide  ·  Menu: ./install.sh%s\n\n' "$C_MUTE" "$RESET"
 }
 
 # ══════════════════════════════════════════════════════════════════
@@ -200,12 +197,19 @@ action_credentials() {
   fi
 }
 
+action_guide() {
+  ui_title "Your guide"
+  components_load
+  guide_open
+}
+
 action_relink() {
   ui_title "Re-link services"
   components_load
   components_derive
   credentials_load || return 1
-  services_link
+  services_link || true
+  guide_generate && log_info "Guide page updated. Open it with: ./install.sh guide"
 }
 
 action_german() {
@@ -339,6 +343,7 @@ action_help() {
   components   choose optional services and LAN exposure
   credentials  change provider, indexers or keys
   relink       repair the connections between services
+  guide        open the "what now?" page in your browser
   german       apply the German release formats
   rebuild      re-seed config files from templates (with backup)
   status       health of every service
@@ -360,26 +365,51 @@ run() {
   "$@" || log_err "That didn't finish cleanly. Details: logs/clezjelly.log"
 }
 
+more_menu() {
+  local choice
+  while true; do
+    ui_banner
+    show_more
+    read -r -p "  ${BOLD}›${RESET} " choice
+    case "$choice" in
+      1) run action_components;  pause ;;
+      2) run action_credentials; pause ;;
+      3) run action_relink;      pause ;;
+      4) run action_german;      pause ;;
+      5) run action_backup;      pause ;;
+      6) run action_rebuild;     pause ;;
+      b|B|"") return 0 ;;
+      *) log_warn "Pick a number, or b to go back."; sleep 1 ;;
+    esac
+  done
+}
+
 main_menu() {
   local choice
   while true; do
     ui_banner
     components_load
-    show_menu
-    read -r -p "  ${BOLD}›${RESET} " choice
-    case "$choice" in
-      1) run action_install;     pause ;;
-      2) run action_components;  pause ;;
-      3) run action_credentials; pause ;;
-      4) run action_relink;      pause ;;
-      5) run action_german;      pause ;;
-      6) run action_rebuild;     pause ;;
-      7) run action_status;      pause ;;
-      8) run action_stack;       pause ;;
-      9) run action_backup;      pause ;;
-      q|Q|"") echo ""; printf '  %sEnjoy the show.%s\n\n' "$C_MUTE" "$RESET"; exit 0 ;;
-      *) log_warn "Pick a number from the menu."; sleep 1 ;;
-    esac
+    if is_installed; then
+      show_home
+      read -r -p "  ${BOLD}›${RESET} " choice
+      case "$choice" in
+        1|"") run action_guide;  pause ;;
+        2) run action_status;    pause ;;
+        3) run action_stack;     pause ;;
+        4) more_menu ;;
+        q|Q) echo ""; printf '  %sEnjoy the show.%s\n\n' "$C_MUTE" "$RESET"; exit 0 ;;
+        *) log_warn "Pick a number from the menu."; sleep 1 ;;
+      esac
+    else
+      show_welcome
+      read -r -p "  ${BOLD}›${RESET} " choice
+      case "$choice" in
+        ""|1|y|Y) run action_install; pause ;;
+        m|M) more_menu ;;
+        q|Q) echo ""; printf '  %sSee you.%s\n\n' "$C_MUTE" "$RESET"; exit 0 ;;
+        *) log_warn "Press Enter to begin, m for more, q to quit."; sleep 1 ;;
+      esac
+    fi
   done
 }
 
@@ -391,6 +421,7 @@ case "${1:-}" in
   components)  run action_components ;;
   credentials) run action_credentials ;;
   relink)      run action_relink ;;
+  guide)       run action_guide ;;
   german)      run action_german ;;
   rebuild)     run action_rebuild ;;
   status)      run action_status ;;

@@ -39,3 +39,6 @@ logs/
 .idea/
 *.swp
 *~
+
+# Generated "what now?" page
+ClezJelly-Guide.html

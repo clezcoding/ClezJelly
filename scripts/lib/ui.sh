@@ -126,15 +126,9 @@ ui_filmstrip() {
 ui_banner() {
   [[ "$UI_COLOR" == 1 ]] && printf '\033[2J\033[H' || true
   echo ""
-  ui_filmstrip
-  echo ""
   ui_wordmark
   echo ""
-  printf '  %sJellyfin · Usenet · zero downloads%s%*s%sv%s%s\n' \
-    "$C_TEXT" "$RESET" $((UI_WIDTH - 34 - ${#CLEZJELLY_VERSION} - 1)) "" "$C_MUTE" "$CLEZJELLY_VERSION" "$RESET"
-  printf '  %s%s%s\n' "$C_MUTE" "$(ui_tagline)" "$RESET"
-  echo ""
-  ui_filmstrip
+  printf '  %sJellyfin · Usenet · zero downloads%s   %sv%s%s\n' "$C_TEXT" "$RESET" "$C_MUTE" "$CLEZJELLY_VERSION" "$RESET"
   echo ""
 }
 
@@ -164,9 +158,10 @@ ui_title() {
 
 log_header() { ui_title "$1"; }
 log_step()   { printf '  %s◆%s %s%s%s\n' "$C_VIOLET" "$RESET" "$BOLD" "$1" "$RESET"; }
-log_ok()     { printf '    %s✓%s %s\n' "$C_OK" "$RESET" "$1"; }
-log_err()    { printf '    %s✗ %s%s\n' "$C_ERR" "$1" "$RESET" >&2; }
-log_warn()   { printf '    %s▲ %s%s\n' "$C_WARN" "$1" "$RESET"; }
+_ui_result() { [[ -n "${UI_RESULTS:-}" ]] && printf '%s\t%s\n' "$1" "$2" >> "$UI_RESULTS" 2>/dev/null || true; }
+log_ok()     { printf '    %s✓%s %s\n' "$C_OK" "$RESET" "$1"; _ui_result ok "$1"; }
+log_err()    { printf '    %s✗ %s%s\n' "$C_ERR" "$1" "$RESET" >&2; _ui_result err "$1"; }
+log_warn()   { printf '    %s▲ %s%s\n' "$C_WARN" "$1" "$RESET"; _ui_result warn "$1"; }
 log_info()   { printf '    %s· %s%s\n' "$C_MUTE" "$1" "$RESET"; }
 log_dim()    { printf '    %s%s%s\n' "$C_MUTE" "$1" "$RESET"; }
 

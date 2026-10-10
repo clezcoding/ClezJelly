@@ -22,7 +22,7 @@ cd ~/Desktop/ClezJelly
 
 ![Installer menu](assets/installer-menu.png)
 
-Choose **1 · Install**.
+On a fresh install the menu shows one clear action: press **Enter** to begin. Later it shows four everyday choices (guide, health, start/stop, more).
 
 ## What the installer asks
 
@@ -57,18 +57,23 @@ In order:
 
 Every step is **idempotent**: running it again never creates duplicates. If a step fails, the others still run, and the installer tells you which one. Fix the cause and choose **4 · Re-link**.
 
-## The finish screen
+## The guide page
 
-When the installer is done, a ticket lists everything that's left for **you**, because only you can create your Jellyfin user:
+When the installer is done, it opens **ClezJelly-Guide.html** in your browser. It's your to-do list for the parts only you can do, because only you can create your Jellyfin user:
 
-1. **Jellyfin** (`http://localhost:8096`): finish the setup wizard and add two libraries:
-   - Movies → `~/Desktop/ClezJelly/data/library/movies`
-   - Shows → `~/Desktop/ClezJelly/data/library/tv`
+![Guide page](assets/guide.png)
 
-   Then *Dashboard → Playback → Transcoding* → pick **Apple VideoToolbox**.
-2. **Seerr** (`http://localhost:5055`): sign in with your Jellyfin account. The Jellyfin URL is `http://jellyfin:8096`. Radarr and Sonarr are already connected.
-3. **TV**: install the Jellyfin app, server `http://<your-mac-ip>:8096`. See [05 · Samsung TV](05-samsung-tv.md).
-4. *Optional:* **Bazarr** (`http://localhost:6767`): choose your subtitle languages and providers.
+- **Needs attention** (only if something failed): what went wrong, why, and the exact command to try.
+- **Your steps**, each with a checkbox, copy buttons and a button that opens the right service:
+  1. **Jellyfin**: create your user and add two libraries, Movies → `~/Desktop/ClezJelly/data/library/movies`, Shows → `~/Desktop/ClezJelly/data/library/tv`. Then *Dashboard → Playback → Transcoding* → **Apple VideoToolbox**.
+  2. **Seerr**: sign in with Jellyfin. URL: `http://jellyfin:8096`. Radarr and Sonarr are already connected.
+  3. **Request your first movie.**
+  4. **TV**: install the Jellyfin app, server `http://<your-mac-ip>:8096`. See [05 · Samsung TV](05-samsung-tv.md).
+  5. *Optional:* **Bazarr** for subtitles.
+- **Your services**: a live green or red dot for each, with an Open link.
+- **If something's off**: short fixes for the usual problems.
+
+Your ticks are remembered in the browser. The page lives in the project folder and is never committed. Reopen it with `./install.sh guide`.
 
 ## Your first stream
 

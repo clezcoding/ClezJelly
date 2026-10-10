@@ -18,7 +18,7 @@ ipconfig getifaddr en0     # Ethernet or Wi-Fi on most Macs
 ipconfig getifaddr en1     # try this if en0 prints nothing
 ```
 
-You'll get something like `192.168.1.42`. The installer's finish screen shows it too.
+You'll get something like `192.168.1.42`. The guide page shows it too (`./install.sh guide`).
 
 > Reserve this address for the Mac in your router (DHCP reservation). Otherwise it may change and your TV loses the server.
 

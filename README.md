@@ -93,7 +93,11 @@ The installer is a menu. Choose **1 · Install** and it runs five phases:
   <img src="docs/assets/installer-wiring.png" alt="The wiring phase of the installer" width="560">
 </p>
 
-When it finishes you get a "ticket" with every address. Open Jellyfin, create your user, add the two libraries (the installer tells you the folders), and you're done. See the [installation guide](docs/02-installation.md) for the click-by-click.
+When it finishes, a **guide page opens in your browser**: a checklist of the few things only you can do (create your Jellyfin user, add the two libraries, connect your TV), with copy buttons, live service status and fixes if a step needs attention. Reopen it any time with `./install.sh guide`.
+
+<p align="center">
+  <img src="docs/assets/guide.png" alt="The guide page that opens after the install" width="520">
+</p>
 
 ---
 
@@ -124,6 +128,7 @@ config/<service>/   one private config folder per service
 
 ```bash
 ./install.sh            # the menu
+./install.sh guide      # reopen your checklist page
 ./install.sh status     # health of every service
 ./install.sh up         # start (also launches Jellyfin)
 ./install.sh down       # stop
@@ -142,6 +147,7 @@ config/<service>/   one private config folder per service
 | `relink` | Repair the connections between services (safe to repeat) |
 | `german` | (Re)apply the German quality formats |
 | `rebuild` | Re-seed config files from templates (your files are backed up first) |
+| `guide` | Open the "what now?" checklist in your browser |
 | `status` | Check every service |
 | `up` / `down` / `update` | Control the stack |
 | `backup` / `restore` | Secrets or full snapshot, stored in `~/ClezJelly-backups` |

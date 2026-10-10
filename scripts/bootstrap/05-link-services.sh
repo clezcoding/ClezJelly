@@ -100,18 +100,34 @@ link_root_folder() {
   arr_request POST "$base/api/v3/rootfolder" "$key" "$(jq -nc --arg p "$path" '{path: $p}')" >/dev/null || return 1
 }
 
+# Find the URL base under which AltMount answers SABnzbd's "version" call.
+# Radarr/Sonarr call <urlBase>/api, so /sabnzbd/api -> urlBase "/sabnzbd".
+# Prints the base (may be empty) or returns 1 if nothing answered.
+altmount_sab_urlbase() {
+  local base resp
+  for base in "/sabnzbd" "/api/sabnzbd" "" "/api"; do
+    resp="$(curl -s --max-time 8 "$ALTMOUNT_URL${base}/api?mode=version&output=json&apikey=$ALTMOUNT_API_KEY" 2>>"$UI_LOG" || true)"
+    if jq -e 'has("version")' <<<"$resp" >/dev/null 2>&1; then
+      printf '%s' "$base"; return 0
+    fi
+    printf 'SAB probe %s/api -> %.80s\n' "$base" "$resp" >>"$UI_LOG"
+  done
+  return 1
+}
+
 # link_download_client <base_url> <api_key> <category_field> <category>
 # category_field: movieCategory (Radarr) or tvCategory (Sonarr)
 link_download_client() {
-  local base="$1" key="$2" catfield="$3" cat="$4"
-  JQ_ARGS=(--arg key "$ALTMOUNT_API_KEY" --arg catfield "$catfield" --arg cat "$cat")
+  local base="$1" key="$2" catfield="$3" cat="$4" ub
+  ub="$(altmount_sab_urlbase)" || { printf 'AltMount SABnzbd API not found on any known path\n' >>"$UI_LOG"; return 1; }
+  JQ_ARGS=(--arg key "$ALTMOUNT_API_KEY" --arg catfield "$catfield" --arg cat "$cat" --arg ub "$ub")
   JQ_FILTER='
     .name = "AltMount" | .enable = true | .priority = 1 | .tags = []
     | .fields |= map(
         if   .name == "host"    then .value = "altmount"
         elif .name == "port"    then .value = 8080
         elif .name == "useSsl"  then .value = false
-        elif .name == "urlBase" then .value = ""
+        elif .name == "urlBase" then .value = $ub
         elif .name == "apiKey"  then .value = $key
         elif .name == $catfield then .value = $cat
         else . end)'
@@ -129,7 +145,17 @@ altmount_register_webhooks() {
 
 # ── Orchestration ─────────────────────────────────────────────────
 
+# Records every ✓ / ▲ / ✗ of the wiring phase for the guide page
 services_link() {
+  local rc=0
+  UI_RESULTS="$CLEZJELLY_ROOT/logs/last-wiring.tsv"; export UI_RESULTS
+  : > "$UI_RESULTS"
+  _services_link_run || rc=$?
+  UI_RESULTS=""; export UI_RESULTS
+  return $rc
+}
+
+_services_link_run() {
   ui_phase 5 5 "Wiring"
   local rc
   cd "$CLEZJELLY_ROOT" || return 1

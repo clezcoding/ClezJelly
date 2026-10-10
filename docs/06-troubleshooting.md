@@ -4,6 +4,9 @@
 
 ## First aid
 
+Start with the guide page: `./install.sh guide`. It lists what failed in the last run and the command to fix it.
+
+
 ```bash
 ./install.sh status                 # every service, healthy or not
 docker compose logs -f altmount     # live logs (also: radarr, sonarr, prowlarr, seerr, bazarr)
@@ -67,6 +70,8 @@ Lower the max connections to about 10, and make sure nothing else is using your 
 ### "No download client available" or the download client test fails
 - Host must be `altmount`, port `8080`. **Never `localhost`**: inside a container that's the container itself.
 - API key must match AltMount's. Run **Re-link** to resync.
+- "Unexpected character `<`" in the log means the request hit AltMount's web page instead of its download API. Re-link probes the known API paths and picks the one that answers; `logs/clezjelly.log` lists every probe (`SAB probe …`). If none answers, open an issue with those lines.
+- AltMount must be **healthy** first: `docker compose logs --tail 30 altmount`.
 - Category: `movies` in Radarr and `tv` in Sonarr.
 
 ### Radarr/Sonarr find releases but nothing is grabbed
